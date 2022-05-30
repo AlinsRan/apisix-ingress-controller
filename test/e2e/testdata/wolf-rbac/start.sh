@@ -39,6 +39,7 @@ docker-compose up -d server restful-demo agent-or agent-demo  >> info.log 2>&1
 sleep 10
 
 docker inspect -f '{{range .NetworkSettings.Networks}}Gateway:{{.Gateway}} IPAdress:{{.IPAddress}}{{end}}' wolf-server >> info.log 2>&1
+docker inspect -f '{{range .NetworkSettings.Networks}}Gateway:{{.Gateway}} IPAdress:{{.IPAddress}}{{end}}' wolf-server >> info.log 2>&1
 
 netstat -atnp | grep ":12180" >> info.log 2>&1
 
