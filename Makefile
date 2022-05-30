@@ -16,7 +16,7 @@
 #
 default: help
 
-VERSION ?= 1.4.0
+VERSION ?= 1.4.1
 RELEASE_SRC = apache-apisix-ingress-controller-${VERSION}-src
 REGISTRY ?="localhost:5000"
 IMAGE_TAG ?= dev
@@ -66,12 +66,13 @@ unit-test:
 
 ### e2e-test:             Run e2e test cases (in existing clusters directly)
 .PHONY: e2e-test
-e2e-test: ginkgo-check push-images
+e2e-test: ginkgo-check push-images wolf-server
 	kubectl apply -k $(PWD)/samples/deploy/crd
 	cd test/e2e \
 		&& go mod download \
 		&& export REGISTRY=$(REGISTRY) \
-		&& ACK_GINKGO_RC=true ginkgo -cover -coverprofile=coverage.txt -r --randomizeSuites --randomizeAllSpecs --trace --nodes=$(E2E_CONCURRENCY) --focus=$(E2E_FOCUS)
+		&& echo $(E2E_FOCUS) | grep "suite-features" || exit 1 \
+		&& ACK_GINKGO_RC=true ginkgo -cover -coverprofile=coverage.txt -r --randomizeSuites --randomizeAllSpecs --trace --nodes=$(E2E_CONCURRENCY) --focus='ApisixRoute with wolfRBAC consumer'
 
 ### e2e-test-local:        Run e2e test cases (kind is required)
 .PHONY: e2e-test-local
@@ -83,6 +84,14 @@ ifeq ("$(wildcard $(GINKGO))", "")
 	@echo "ERROR: Need to install ginkgo first, run: go get -u github.com/onsi/ginkgo/ginkgo"
 	exit 1
 endif
+
+
+### push-ingress-images:  Build and push Ingress image used in e2e test suites to kind or custom registry.
+.PHONY: push-ingress-images
+push-ingress-images:
+	docker build -t apache/apisix-ingress-controller:$(IMAGE_TAG) --build-arg ENABLE_PROXY=$(ENABLE_PROXY) .
+	docker tag apache/apisix-ingress-controller:$(IMAGE_TAG) $(REGISTRY)/apache/apisix-ingress-controller:$(IMAGE_TAG)
+	docker push $(REGISTRY)/apache/apisix-ingress-controller:$(IMAGE_TAG)
 
 ### push-images:  Push images used in e2e test suites to kind or custom registry.
 .PHONY: push-images
@@ -209,3 +218,9 @@ update-all: update-codegen update-license update-mdlint update-gofmt
 .PHONY: e2e-names-check
 e2e-names-check:
 	chmod +x ./utils/check-e2e-names.sh && ./utils/check-e2e-names.sh
+
+.PHONY: wolf-server
+wolf-server:
+ifeq ($(E2E_FOCUS), suite-features*)
+	./test/e2e/testdata/wolf-rbac/start.sh
+endif
