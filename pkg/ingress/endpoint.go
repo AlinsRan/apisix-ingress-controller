@@ -27,6 +27,7 @@ import (
 	"github.com/apache/apisix-ingress-controller/pkg/kube"
 	"github.com/apache/apisix-ingress-controller/pkg/log"
 	"github.com/apache/apisix-ingress-controller/pkg/types"
+	v1 "github.com/apache/apisix-ingress-controller/pkg/types/apisix/v1"
 )
 
 type endpointsController struct {
@@ -85,12 +86,26 @@ func (c *endpointsController) run(ctx context.Context) {
 
 func (c *endpointsController) sync(ctx context.Context, ev *types.Event) error {
 	ep := ev.Object.(kube.Endpoint)
-	newestEp, err := c.controller.epLister.GetEndpoint(ep.Namespace(), ep.ServiceName())
+	ns, err := ep.Namespace()
+	if err != nil {
+		return err
+	}
+	newestEp, err := c.controller.epLister.GetEndpoint(ns, ep.ServiceName())
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return err
 		}
 		newestEp = ep
+	}
+	if ev.Type == types.EventDelete && newestEp != nil {
+		clusterName := c.controller.cfg.APISIX.DefaultClusterName
+		err = c.controller.apisix.Cluster(clusterName).UpstreamServiceRelation().Delete(ctx,
+			&v1.UpstreamServiceRelation{
+				ServiceName: ns + "_" + newestEp.ServiceName(),
+			})
+		if err != nil {
+			return err
+		}
 	}
 	return c.controller.syncEndpoint(ctx, newestEp)
 }
