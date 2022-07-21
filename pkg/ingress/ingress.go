@@ -167,20 +167,21 @@ func (c *ingressController) sync(ctx context.Context, ev *types.Event) error {
 		// TODO There may be residual upstream data. When the service is deleted, it has no impact
 		oldCtx, err := c.controller.translator.TranslateIngress(ingEv.OldObject, true)
 		if err != nil {
-			log.Errorw("failed to translate ingress",
+			log.Debug("failed to translate ingress",
 				zap.String("event", "update"),
 				zap.Error(err),
 				zap.Any("ingress", ingEv.OldObject),
 			)
-			return err
+			updated = m
+		} else {
+			om := &utils.Manifest{
+				Routes:        oldCtx.Routes,
+				Upstreams:     oldCtx.Upstreams,
+				SSLs:          oldCtx.SSL,
+				PluginConfigs: oldCtx.PluginConfigs,
+			}
+			added, updated, deleted = m.Diff(om)
 		}
-		om := &utils.Manifest{
-			Routes:        oldCtx.Routes,
-			Upstreams:     oldCtx.Upstreams,
-			SSLs:          oldCtx.SSL,
-			PluginConfigs: oldCtx.PluginConfigs,
-		}
-		added, updated, deleted = m.Diff(om)
 	}
 	if err := c.controller.syncManifests(ctx, added, updated, deleted); err != nil {
 		log.Errorw("failed to sync ingress artifacts",
