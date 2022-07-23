@@ -324,7 +324,12 @@ func (t *translator) translateUpstreamFromIngressV1(namespace string, backend *n
 	} else {
 		svcPort = backend.Port.Number
 	}
-	ups, err := t.TranslateUpstream(namespace, backend.Name, "", svcPort)
+	ups, err := t.TranslateUpstream(
+		&UpstreamArg{
+			Namespace: namespace,
+			Name:      backend.Name,
+			Port:      svcPort,
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +475,12 @@ func (t *translator) translateUpstreamFromIngressV1beta1(namespace string, svcNa
 	} else {
 		portNumber = svcPort.IntVal
 	}
-	ups, err := t.TranslateUpstream(namespace, svcName, "", portNumber)
+	ups, err := t.TranslateUpstream(
+		&UpstreamArg{
+			Namespace: namespace,
+			Name:      svcName,
+			Port:      portNumber,
+		})
 	if err != nil {
 		return nil, err
 	}

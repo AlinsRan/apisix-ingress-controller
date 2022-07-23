@@ -114,16 +114,6 @@ func (t *translator) translateHTTPRouteV2beta2(ctx *TranslateContext, ar *config
 		backend := backends[0]
 		backends = backends[1:]
 
-		svcClusterIP, svcPort, err := t.getServiceClusterIPAndPort(&backend, ar.Namespace)
-		if err != nil {
-			log.Errorw("failed to get service port in backend",
-				zap.Any("backend", backend),
-				zap.Any("apisix_route", ar),
-				zap.Error(err),
-			)
-			return err
-		}
-
 		pluginMap := make(apisixv1.Plugins)
 		// add route plugins
 		for _, plugin := range part.Plugins {
@@ -150,6 +140,7 @@ func (t *translator) translateHTTPRouteV2beta2(ctx *TranslateContext, ar *config
 		}
 
 		var exprs [][]apisixv1.StringOrSlice
+		var err error
 		if part.Match.NginxVars != nil {
 			exprs, err = t.translateRouteMatchExprs(part.Match.NginxVars)
 			if err != nil {
@@ -169,7 +160,7 @@ func (t *translator) translateHTTPRouteV2beta2(ctx *TranslateContext, ar *config
 			return err
 		}
 
-		upstreamName := apisixv1.ComposeUpstreamName(ar.Namespace, backend.ServiceName, backend.Subset, svcPort)
+		upstreamName := apisixv1.ComposeUpstreamName(ar.Namespace, backend.ServiceName, backend.Subset, backend.ServicePort.IntVal)
 		route := apisixv1.NewDefaultRoute()
 		route.Name = apisixv1.ComposeRouteName(ar.Namespace, ar.Name, part.Name)
 		route.ID = id.GenID(route.Name)
@@ -202,7 +193,14 @@ func (t *translator) translateHTTPRouteV2beta2(ctx *TranslateContext, ar *config
 		}
 		ctx.AddRoute(route)
 		if !ctx.CheckUpstreamExist(upstreamName) {
-			ups, err := t.translateUpstream(ar.Namespace, backend.ServiceName, backend.Subset, backend.ResolveGranularity, svcClusterIP, svcPort)
+			ups, err := t.TranslateUpstream(
+				&UpstreamArg{
+					Namespace:          ar.Namespace,
+					Name:               backend.ServiceName,
+					Port:               backend.ServicePort.IntVal,
+					Subset:             backend.Subset,
+					ResolveGranularity: backend.ResolveGranularity,
+				})
 			if err != nil {
 				return err
 			}
@@ -225,16 +223,6 @@ func (t *translator) translateHTTPRouteV2beta3(ctx *TranslateContext, ar *config
 		backend := backends[0]
 		backends = backends[1:]
 
-		svcClusterIP, svcPort, err := t.getServiceClusterIPAndPort(&backend, ar.Namespace)
-		if err != nil {
-			log.Errorw("failed to get service port in backend",
-				zap.Any("backend", backend),
-				zap.Any("apisix_route", ar),
-				zap.Error(err),
-			)
-			return err
-		}
-
 		var timeout *apisixv1.UpstreamTimeout
 		if part.Timeout != nil {
 			timeout = &apisixv1.UpstreamTimeout{
@@ -284,6 +272,7 @@ func (t *translator) translateHTTPRouteV2beta3(ctx *TranslateContext, ar *config
 		}
 
 		var exprs [][]apisixv1.StringOrSlice
+		var err error
 		if part.Match.NginxVars != nil {
 			exprs, err = t.translateRouteMatchExprs(part.Match.NginxVars)
 			if err != nil {
@@ -303,7 +292,7 @@ func (t *translator) translateHTTPRouteV2beta3(ctx *TranslateContext, ar *config
 			return err
 		}
 
-		upstreamName := apisixv1.ComposeUpstreamName(ar.Namespace, backend.ServiceName, backend.Subset, svcPort)
+		upstreamName := apisixv1.ComposeUpstreamName(ar.Namespace, backend.ServiceName, backend.Subset, backend.ServicePort.IntVal)
 		route := apisixv1.NewDefaultRoute()
 		route.Name = apisixv1.ComposeRouteName(ar.Namespace, ar.Name, part.Name)
 		route.ID = id.GenID(route.Name)
@@ -338,7 +327,14 @@ func (t *translator) translateHTTPRouteV2beta3(ctx *TranslateContext, ar *config
 		}
 		ctx.AddRoute(route)
 		if !ctx.CheckUpstreamExist(upstreamName) {
-			ups, err := t.translateUpstream(ar.Namespace, backend.ServiceName, backend.Subset, backend.ResolveGranularity, svcClusterIP, svcPort)
+			ups, err := t.TranslateUpstream(
+				&UpstreamArg{
+					Namespace:          ar.Namespace,
+					Name:               backend.ServiceName,
+					Port:               backend.ServicePort.IntVal,
+					Subset:             backend.Subset,
+					ResolveGranularity: backend.ResolveGranularity,
+				})
 			if err != nil {
 				return err
 			}
@@ -361,16 +357,6 @@ func (t *translator) translateHTTPRouteV2(ctx *TranslateContext, ar *configv2.Ap
 		backend := backends[0]
 		backends = backends[1:]
 
-		svcClusterIP, svcPort, err := t.getServiceClusterIPAndPort(&backend, ar.Namespace)
-		if err != nil {
-			log.Errorw("failed to get service port in backend",
-				zap.Any("backend", backend),
-				zap.Any("apisix_route", ar),
-				zap.Error(err),
-			)
-			return err
-		}
-
 		var timeout *apisixv1.UpstreamTimeout
 		if part.Timeout != nil {
 			timeout = &apisixv1.UpstreamTimeout{
@@ -420,6 +406,7 @@ func (t *translator) translateHTTPRouteV2(ctx *TranslateContext, ar *configv2.Ap
 		}
 
 		var exprs [][]apisixv1.StringOrSlice
+		var err error
 		if part.Match.NginxVars != nil {
 			exprs, err = t.translateRouteMatchExprs(part.Match.NginxVars)
 			if err != nil {
@@ -439,7 +426,7 @@ func (t *translator) translateHTTPRouteV2(ctx *TranslateContext, ar *configv2.Ap
 			return err
 		}
 
-		upstreamName := apisixv1.ComposeUpstreamName(ar.Namespace, backend.ServiceName, backend.Subset, svcPort)
+		upstreamName := apisixv1.ComposeUpstreamName(ar.Namespace, backend.ServiceName, backend.Subset, backend.ServicePort.IntVal)
 		route := apisixv1.NewDefaultRoute()
 		route.Name = apisixv1.ComposeRouteName(ar.Namespace, ar.Name, part.Name)
 		route.ID = id.GenID(route.Name)
@@ -474,7 +461,14 @@ func (t *translator) translateHTTPRouteV2(ctx *TranslateContext, ar *configv2.Ap
 		}
 		ctx.AddRoute(route)
 		if !ctx.CheckUpstreamExist(upstreamName) {
-			ups, err := t.translateUpstream(ar.Namespace, backend.ServiceName, backend.Subset, backend.ResolveGranularity, svcClusterIP, svcPort)
+			ups, err := t.TranslateUpstream(
+				&UpstreamArg{
+					Namespace:          ar.Namespace,
+					Name:               backend.ServiceName,
+					Port:               backend.ServicePort.IntVal,
+					Subset:             backend.Subset,
+					ResolveGranularity: backend.ResolveGranularity,
+				})
 			if err != nil {
 				return err
 			}
@@ -733,20 +727,19 @@ func (t *translator) translateStreamRouteV2beta2(ctx *TranslateContext, ar *conf
 		}
 		ruleNameMap[part.Name] = struct{}{}
 		backend := part.Backend
-		svcClusterIP, svcPort, err := t.getStreamServiceClusterIPAndPortV2beta2(backend, ar.Namespace)
-		if err != nil {
-			log.Errorw("failed to get service port in backend",
-				zap.Any("backend", backend),
-				zap.Any("apisix_route", ar),
-				zap.Error(err),
-			)
-			return err
-		}
+
 		sr := apisixv1.NewDefaultStreamRoute()
 		name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
 		sr.ID = id.GenID(name)
 		sr.ServerPort = part.Match.IngressPort
-		ups, err := t.translateUpstream(ar.Namespace, backend.ServiceName, backend.Subset, backend.ResolveGranularity, svcClusterIP, svcPort)
+		ups, err := t.TranslateUpstream(
+			&UpstreamArg{
+				Namespace:          ar.Namespace,
+				Name:               backend.ServiceName,
+				Port:               backend.ServicePort.IntVal,
+				Subset:             backend.Subset,
+				ResolveGranularity: backend.ResolveGranularity,
+			})
 		if err != nil {
 			return err
 		}
@@ -768,20 +761,18 @@ func (t *translator) translateStreamRouteV2beta3(ctx *TranslateContext, ar *conf
 		}
 		ruleNameMap[part.Name] = struct{}{}
 		backend := part.Backend
-		svcClusterIP, svcPort, err := t.getStreamServiceClusterIPAndPortV2beta3(backend, ar.Namespace)
-		if err != nil {
-			log.Errorw("failed to get service port in backend",
-				zap.Any("backend", backend),
-				zap.Any("apisix_route", ar),
-				zap.Error(err),
-			)
-			return err
-		}
 		sr := apisixv1.NewDefaultStreamRoute()
 		name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
 		sr.ID = id.GenID(name)
 		sr.ServerPort = part.Match.IngressPort
-		ups, err := t.translateUpstream(ar.Namespace, backend.ServiceName, backend.Subset, backend.ResolveGranularity, svcClusterIP, svcPort)
+		ups, err := t.TranslateUpstream(
+			&UpstreamArg{
+				Namespace:          ar.Namespace,
+				Name:               backend.ServiceName,
+				Port:               backend.ServicePort.IntVal,
+				Subset:             backend.Subset,
+				ResolveGranularity: backend.ResolveGranularity,
+			})
 		if err != nil {
 			return err
 		}
@@ -803,20 +794,19 @@ func (t *translator) translateStreamRouteV2(ctx *TranslateContext, ar *configv2.
 		}
 		ruleNameMap[part.Name] = struct{}{}
 		backend := part.Backend
-		svcClusterIP, svcPort, err := t.getStreamServiceClusterIPAndPortV2(backend, ar.Namespace)
-		if err != nil {
-			log.Errorw("failed to get service port in backend",
-				zap.Any("backend", backend),
-				zap.Any("apisix_route", ar),
-				zap.Error(err),
-			)
-			return err
-		}
+
 		sr := apisixv1.NewDefaultStreamRoute()
 		name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
 		sr.ID = id.GenID(name)
 		sr.ServerPort = part.Match.IngressPort
-		ups, err := t.translateUpstream(ar.Namespace, backend.ServiceName, backend.Subset, backend.ResolveGranularity, svcClusterIP, svcPort)
+		ups, err := t.TranslateUpstream(
+			&UpstreamArg{
+				Namespace:          ar.Namespace,
+				Name:               backend.ServiceName,
+				Port:               backend.ServicePort.IntVal,
+				Subset:             backend.Subset,
+				ResolveGranularity: backend.ResolveGranularity,
+			})
 		if err != nil {
 			return err
 		}

@@ -222,3 +222,10 @@ func NewEndpointWithSlice(ep *discoveryv1.EndpointSlice) Endpoint {
 		endpointSlices: []*discoveryv1.EndpointSlice{ep},
 	}
 }
+
+func NewEndpointLister(epLister listerscorev1.EndpointsLister, epsLister listersdiscoveryv1.EndpointSliceLister) EndpointLister {
+	return &endpointLister{
+		epLister:  epLister,
+		epsLister: epsLister,
+	}
+}

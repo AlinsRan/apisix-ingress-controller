@@ -16,6 +16,7 @@ package translation
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,6 +32,7 @@ import (
 	configv2 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2"
 	configv2beta3 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2beta3"
 	apisixv1 "github.com/apache/apisix-ingress-controller/pkg/types/apisix/v1"
+	v1 "github.com/apache/apisix-ingress-controller/pkg/types/apisix/v1"
 )
 
 func TestTranslateUpstreamConfigV2beta3(t *testing.T) {
@@ -223,9 +225,15 @@ func TestTranslateUpstreamNodes(t *testing.T) {
 	informersFactory := informers.NewSharedInformerFactory(client, 0)
 	svcInformer := informersFactory.Core().V1().Services().Informer()
 	svcLister := informersFactory.Core().V1().Services().Lister()
+	epLister, epInformer := kube.NewEndpointListerAndInformer(informersFactory, false)
 
-	processCh := make(chan struct{})
+	processCh := make(chan struct{}, 2)
 	svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			processCh <- struct{}{}
+		},
+	})
+	epInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			processCh <- struct{}{}
 		},
@@ -234,24 +242,39 @@ func TestTranslateUpstreamNodes(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go svcInformer.Run(stopCh)
+	go epInformer.Run(stopCh)
 	cache.WaitForCacheSync(stopCh, svcInformer.HasSynced)
+	cache.WaitForCacheSync(stopCh, epInformer.HasSynced)
 
 	_, err := client.CoreV1().Services("test").Create(context.Background(), svc, metav1.CreateOptions{})
 	assert.Nil(t, err)
+	_, err = client.CoreV1().Endpoints("test").Create(context.Background(), endpoints, metav1.CreateOptions{})
+	assert.Nil(t, err)
 
 	tr := &translator{&TranslatorOptions{
-		ServiceLister: svcLister,
+		ServiceLister:  svcLister,
+		EndpointLister: epLister,
 	}}
 	<-processCh
+	<-processCh
 
-	nodes, err := tr.TranslateUpstreamNodes(kube.NewEndpoint(endpoints), 10080, nil)
-	assert.Nil(t, nodes)
-	assert.Equal(t, &translateError{
-		field:  "service.spec.ports",
-		reason: "port not defined",
-	}, err)
+	nodes, err := tr.TranslateUpstreamNodes(
+		&UpstreamArg{
+			Namespace: endpoints.Namespace,
+			Name:      endpoints.Name,
+			Port:      10080,
+		},
+	)
+	assert.Nil(t, err)
+	assert.Equal(t, apisixv1.UpstreamNodes{}, nodes)
 
-	nodes, err = tr.TranslateUpstreamNodes(kube.NewEndpoint(endpoints), 80, nil)
+	nodes, err = tr.TranslateUpstreamNodes(
+		&UpstreamArg{
+			Namespace: endpoints.Namespace,
+			Name:      endpoints.Name,
+			Port:      80,
+		},
+	)
 	assert.Nil(t, err)
 	assert.Equal(t, apisixv1.UpstreamNodes{
 		{
@@ -266,7 +289,13 @@ func TestTranslateUpstreamNodes(t *testing.T) {
 		},
 	}, nodes)
 
-	nodes, err = tr.TranslateUpstreamNodes(kube.NewEndpoint(endpoints), 443, nil)
+	nodes, err = tr.TranslateUpstreamNodes(
+		&UpstreamArg{
+			Namespace: endpoints.Namespace,
+			Name:      endpoints.Name,
+			Port:      443,
+		},
+	)
 	assert.Nil(t, err)
 	assert.Equal(t, apisixv1.UpstreamNodes{
 		{
@@ -352,9 +381,15 @@ func TestTranslateUpstreamNodesWithEndpointSlices(t *testing.T) {
 	informersFactory := informers.NewSharedInformerFactory(client, 0)
 	svcInformer := informersFactory.Core().V1().Services().Informer()
 	svcLister := informersFactory.Core().V1().Services().Lister()
+	epLister, epInformer := kube.NewEndpointListerAndInformer(informersFactory, true)
 
-	processCh := make(chan struct{})
+	processCh := make(chan struct{}, 2)
 	svcInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			processCh <- struct{}{}
+		},
+	})
+	epInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			processCh <- struct{}{}
 		},
@@ -363,24 +398,40 @@ func TestTranslateUpstreamNodesWithEndpointSlices(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go svcInformer.Run(stopCh)
+	go epInformer.Run(stopCh)
 	cache.WaitForCacheSync(stopCh, svcInformer.HasSynced)
+	cache.WaitForCacheSync(stopCh, epInformer.HasSynced)
 
 	_, err := client.CoreV1().Services("test").Create(context.Background(), svc, metav1.CreateOptions{})
 	assert.Nil(t, err)
+	_, err = client.DiscoveryV1().EndpointSlices("test").Create(context.Background(), ep, metav1.CreateOptions{})
+	assert.Nil(t, err)
 
 	tr := &translator{&TranslatorOptions{
-		ServiceLister: svcLister,
+		ServiceLister:     svcLister,
+		EndpointLister:    epLister,
+		UseEndpointSlices: true,
 	}}
 	<-processCh
+	<-processCh
 
-	nodes, err := tr.TranslateUpstreamNodes(kube.NewEndpointWithSlice(ep), 10080, nil)
-	assert.Nil(t, nodes)
-	assert.Equal(t, err, &translateError{
-		field:  "service.spec.ports",
-		reason: "port not defined",
-	})
-
-	nodes, err = tr.TranslateUpstreamNodes(kube.NewEndpointWithSlice(ep), 80, nil)
+	nodes, err := tr.TranslateUpstreamNodes(
+		&UpstreamArg{
+			Namespace: ep.Namespace,
+			Name:      ep.Name,
+			Port:      10080,
+		},
+	)
+	assert.Nil(t, err)
+	assert.Equal(t, v1.UpstreamNodes{}, nodes)
+	fmt.Println(ep.Namespace, ep.Name)
+	nodes, err = tr.TranslateUpstreamNodes(
+		&UpstreamArg{
+			Namespace: ep.Namespace,
+			Name:      ep.Name,
+			Port:      80,
+		},
+	)
 	assert.Nil(t, err)
 	assert.Equal(t, apisixv1.UpstreamNodes{
 		{
@@ -395,7 +446,13 @@ func TestTranslateUpstreamNodesWithEndpointSlices(t *testing.T) {
 		},
 	}, nodes)
 
-	nodes, err = tr.TranslateUpstreamNodes(kube.NewEndpointWithSlice(ep), 443, nil)
+	nodes, err = tr.TranslateUpstreamNodes(
+		&UpstreamArg{
+			Namespace: ep.Namespace,
+			Name:      ep.Name,
+			Port:      intstr.FromInt(),
+		},
+	)
 	assert.Nil(t, err)
 	assert.Equal(t, apisixv1.UpstreamNodes{
 		{

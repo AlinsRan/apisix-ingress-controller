@@ -17,9 +17,7 @@ package translation
 import (
 	"fmt"
 
-	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	listerscorev1 "k8s.io/client-go/listers/core/v1"
 
 	config "github.com/apache/apisix-ingress-controller/pkg/config"
@@ -27,7 +25,6 @@ import (
 	configv2 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2"
 	configv2beta2 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2beta2"
 	configv2beta3 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2beta3"
-	"github.com/apache/apisix-ingress-controller/pkg/log"
 	"github.com/apache/apisix-ingress-controller/pkg/types"
 	apisixv1 "github.com/apache/apisix-ingress-controller/pkg/types/apisix/v1"
 )
@@ -50,7 +47,7 @@ type Translator interface {
 	// TranslateUpstreamNodes translate Endpoints resources to APISIX Upstream nodes
 	// according to the give port. Extra labels can be passed to filter the ultimate
 	// upstream nodes.
-	TranslateUpstreamNodes(kube.Endpoint, int32, types.Labels) (apisixv1.UpstreamNodes, error)
+	TranslateUpstreamNodes(*UpstreamArg) (apisixv1.UpstreamNodes, error)
 	// TranslateUpstreamConfigV2beta3 translates ApisixUpstreamConfig (part of ApisixUpstream)
 	// to APISIX Upstream, it doesn't fill the the Upstream metadata and nodes.
 	TranslateUpstreamConfigV2beta3(*configv2beta3.ApisixUpstreamConfig) (*apisixv1.Upstream, error)
@@ -66,7 +63,7 @@ type Translator interface {
 	// matching the subset labels (defined in ApisixUpstream) will be selected.
 	// When the subset is not found, the node list will be empty. When the subset is empty,
 	// all pods IP will be filled.
-	TranslateUpstream(string, string, string, int32) (*apisixv1.Upstream, error)
+	TranslateUpstream(*UpstreamArg) (*apisixv1.Upstream, error)
 	// TranslateIngress composes a couple of APISIX Routes and upstreams according
 	// to the given Ingress resource.
 	TranslateIngress(kube.Ingress, ...bool) (*TranslateContext, error)
@@ -185,199 +182,16 @@ func (t *translator) TranslateUpstreamConfigV2(au *configv2.ApisixUpstreamConfig
 	return ups, nil
 }
 
-func (t *translator) TranslateUpstream(namespace, name, subset string, port int32) (*apisixv1.Upstream, error) {
-	var (
-		endpoint kube.Endpoint
-		err      error
-	)
-	if t.UseEndpointSlices {
-		endpoint, err = t.EndpointLister.GetEndpointSlices(namespace, name)
-	} else {
-		endpoint, err = t.EndpointLister.GetEndpoint(namespace, name)
-	}
-	if err != nil {
-		return nil, &translateError{
-			field:  "endpoints",
-			reason: err.Error(),
-		}
-	}
-
+// namespace, name, subset string, port int32
+func (t *translator) TranslateUpstream(arg *UpstreamArg) (*apisixv1.Upstream, error) {
 	switch t.APIVersion {
 	case config.ApisixV2beta3:
-		return t.translateUpstreamV2beta3(&endpoint, namespace, name, subset, port)
+		return t.translateUpstreamV2beta3(arg)
 	case config.ApisixV2:
-		return t.translateUpstreamV2(&endpoint, namespace, name, subset, port)
+		return t.translateUpstreamV2(arg)
 	default:
 		panic(fmt.Errorf("unsupported ApisixUpstream version %v", t.APIVersion))
 	}
-}
-
-func (t *translator) translateUpstreamV2(ep *kube.Endpoint, namespace, name, subset string, port int32) (*apisixv1.Upstream, error) {
-	au, err := t.ApisixUpstreamLister.V2(namespace, name)
-	ups := apisixv1.NewDefaultUpstream()
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			// If subset in ApisixRoute is not empty but the ApisixUpstream resource not found,
-			// just set an empty node list.
-			if subset != "" {
-				ups.Nodes = apisixv1.UpstreamNodes{}
-				return ups, nil
-			}
-		} else {
-			return nil, &translateError{
-				field:  "ApisixUpstream",
-				reason: err.Error(),
-			}
-		}
-	}
-	var labels types.Labels
-	if subset != "" {
-		for _, ss := range au.V2().Spec.Subsets {
-			if ss.Name == subset {
-				labels = ss.Labels
-				break
-			}
-		}
-	}
-	// Filter nodes by subset.
-	nodes, err := t.TranslateUpstreamNodes(*ep, port, labels)
-	if err != nil {
-		return nil, err
-	}
-	if au == nil || au.V2().Spec == nil {
-		ups.Nodes = nodes
-		return ups, nil
-	}
-
-	upsCfg := &au.V2().Spec.ApisixUpstreamConfig
-	for _, pls := range au.V2().Spec.PortLevelSettings {
-		if pls.Port == port {
-			upsCfg = &pls.ApisixUpstreamConfig
-			break
-		}
-	}
-	ups, err = t.TranslateUpstreamConfigV2(upsCfg)
-	if err != nil {
-		return nil, err
-	}
-	ups.Nodes = nodes
-	return ups, nil
-}
-
-func (t *translator) translateUpstreamV2beta3(ep *kube.Endpoint, namespace, name, subset string, port int32) (*apisixv1.Upstream, error) {
-	au, err := t.ApisixUpstreamLister.V2beta3(namespace, name)
-	ups := apisixv1.NewDefaultUpstream()
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			// If subset in ApisixRoute is not empty but the ApisixUpstream resource not found,
-			// just set an empty node list.
-			if subset != "" {
-				ups.Nodes = apisixv1.UpstreamNodes{}
-				return ups, nil
-			}
-		} else {
-			return nil, &translateError{
-				field:  "ApisixUpstream",
-				reason: err.Error(),
-			}
-		}
-	}
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			// If subset in ApisixRoute is not empty but the ApisixUpstream resource not found,
-			// just set an empty node list.
-			if subset != "" {
-				ups.Nodes = apisixv1.UpstreamNodes{}
-				return ups, nil
-			}
-		} else {
-			return nil, &translateError{
-				field:  "ApisixUpstream",
-				reason: err.Error(),
-			}
-		}
-	}
-	var labels types.Labels
-	if subset != "" {
-		for _, ss := range au.V2beta3().Spec.Subsets {
-			if ss.Name == subset {
-				labels = ss.Labels
-				break
-			}
-		}
-	}
-	// Filter nodes by subset.
-	nodes, err := t.TranslateUpstreamNodes(*ep, port, labels)
-	if err != nil {
-		return nil, err
-	}
-	if au == nil || au.V2beta3().Spec == nil {
-		ups.Nodes = nodes
-		return ups, nil
-	}
-
-	upsCfg := &au.V2beta3().Spec.ApisixUpstreamConfig
-	for _, pls := range au.V2beta3().Spec.PortLevelSettings {
-		if pls.Port == port {
-			upsCfg = &pls.ApisixUpstreamConfig
-			break
-		}
-	}
-	ups, err = t.TranslateUpstreamConfigV2beta3(upsCfg)
-	if err != nil {
-		return nil, err
-	}
-	ups.Nodes = nodes
-	return ups, nil
-}
-
-func (t *translator) TranslateUpstreamNodes(endpoint kube.Endpoint, port int32, labels types.Labels) (apisixv1.UpstreamNodes, error) {
-	namespace, err := endpoint.Namespace()
-	if err != nil {
-		log.Errorw("failed to get endpoint namespace",
-			zap.Error(err),
-			zap.Any("endpoint", endpoint),
-		)
-		return nil, err
-	}
-	svcName := endpoint.ServiceName()
-	svc, err := t.ServiceLister.Services(namespace).Get(svcName)
-	if err != nil {
-		return nil, &translateError{
-			field:  "service",
-			reason: err.Error(),
-		}
-	}
-
-	var svcPort *corev1.ServicePort
-	for _, exposePort := range svc.Spec.Ports {
-		if exposePort.Port == port {
-			svcPort = &exposePort
-			break
-		}
-	}
-	if svcPort == nil {
-		return nil, &translateError{
-			field:  "service.spec.ports",
-			reason: "port not defined",
-		}
-	}
-	// As nodes is not optional, here we create an empty slice,
-	// not a nil slice.
-	nodes := make(apisixv1.UpstreamNodes, 0)
-	for _, hostport := range endpoint.Endpoints(svcPort) {
-		nodes = append(nodes, apisixv1.UpstreamNode{
-			Host: hostport.Host,
-			Port: hostport.Port,
-			// FIXME Custom node weight
-			Weight: _defaultWeight,
-		})
-	}
-	if labels != nil {
-		nodes = t.filterNodesByLabels(nodes, labels, namespace)
-		return nodes, nil
-	}
-	return nodes, nil
 }
 
 func (t *translator) TranslateIngress(ing kube.Ingress, args ...bool) (*TranslateContext, error) {
