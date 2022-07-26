@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"github.com/apache/apisix-ingress-controller/pkg/id"
-	"github.com/apache/apisix-ingress-controller/pkg/kube"
 	configv2 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2"
 	configv2beta3 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2beta3"
 	"github.com/apache/apisix-ingress-controller/pkg/log"
@@ -191,15 +190,7 @@ func (t *translator) TranslateUpstreamNodes(arg *UpstreamArg) (apisixv1.Upstream
 		}, nil
 	case ResolveGranularityEndpoint:
 		nodes := make(apisixv1.UpstreamNodes, 0)
-		var (
-			endpoint kube.Endpoint
-			err      error
-		)
-		if t.UseEndpointSlices {
-			endpoint, err = t.EndpointLister.GetEndpointSlices(arg.Namespace, arg.Name)
-		} else {
-			endpoint, err = t.EndpointLister.GetEndpoint(arg.Namespace, arg.Name)
-		}
+		endpoint, err := t.EndpointLister.GetEndpoint(arg.Namespace, arg.Name)
 		if err != nil {
 			return nodes, nil
 		}

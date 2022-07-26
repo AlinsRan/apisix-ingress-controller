@@ -167,7 +167,7 @@ func (c *ingressController) sync(ctx context.Context, ev *types.Event) error {
 		// TODO There may be residual upstream data. When the service is deleted, it has no impact
 		oldCtx, err := c.controller.translator.TranslateIngress(ingEv.OldObject)
 		if err != nil {
-			log.Debug("failed to translate ingress",
+			log.Errorw("failed to translate ingress",
 				zap.String("event", "update"),
 				zap.Error(err),
 				zap.Any("ingress", ingEv.OldObject),

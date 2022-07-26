@@ -330,7 +330,7 @@ func (c *apisixRouteController) sync(ctx context.Context, ev *types.Event) error
 		oldCtx, err = c.controller.getOldTranslateContext(ctx, obj.OldObject)
 		// When the old object fails, it should not be retried, but updated directly.
 		if err != nil {
-			log.Debugw("failed to translate old ApisixRoute",
+			log.Errorw("failed to translate old ApisixRoute",
 				zap.String("version", obj.GroupVersion),
 				zap.String("event", "update"),
 				zap.Error(err),
