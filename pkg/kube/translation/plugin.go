@@ -49,7 +49,7 @@ func (t *translator) translateTrafficSplitPlugin(ctx *TranslateContext, ns strin
 			&UpstreamArg{
 				Namespace:          ns,
 				Name:               backend.ServiceName,
-				Port:               backend.ServicePort.IntVal,
+				Port:               backend.ServicePort,
 				Subset:             backend.Subset,
 				ResolveGranularity: backend.ResolveGranularity,
 			})

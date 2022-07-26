@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	listerscorev1 "k8s.io/client-go/listers/core/v1"
 
 	config "github.com/apache/apisix-ingress-controller/pkg/config"
@@ -66,7 +67,7 @@ type Translator interface {
 	TranslateUpstream(*UpstreamArg) (*apisixv1.Upstream, error)
 	// TranslateIngress composes a couple of APISIX Routes and upstreams according
 	// to the given Ingress resource.
-	TranslateIngress(kube.Ingress, ...bool) (*TranslateContext, error)
+	TranslateIngress(kube.Ingress) (*TranslateContext, error)
 	// TranslateRouteV2beta2 translates the configv2beta2.ApisixRoute object into several Route,
 	// and Upstream resources.
 	TranslateRouteV2beta2(*configv2beta2.ApisixRoute) (*TranslateContext, error)
@@ -182,8 +183,25 @@ func (t *translator) TranslateUpstreamConfigV2(au *configv2.ApisixUpstreamConfig
 	return ups, nil
 }
 
-// namespace, name, subset string, port int32
 func (t *translator) TranslateUpstream(arg *UpstreamArg) (*apisixv1.Upstream, error) {
+	if arg.Port.Type == intstr.String {
+		svc, err := t.ServiceLister.Services(arg.Namespace).Get(arg.Name)
+		if err != nil {
+			return nil, err
+		}
+		for _, exposePort := range svc.Spec.Ports {
+			if exposePort.Name == arg.Port.StrVal {
+				arg.Port = intstr.FromInt(int(exposePort.Port))
+				break
+			}
+		}
+	}
+	if arg.Port.Type != intstr.Int {
+		return nil, &translateError{
+			field:  "service",
+			reason: "port not found",
+		}
+	}
 	switch t.APIVersion {
 	case config.ApisixV2beta3:
 		return t.translateUpstreamV2beta3(arg)
@@ -194,18 +212,14 @@ func (t *translator) TranslateUpstream(arg *UpstreamArg) (*apisixv1.Upstream, er
 	}
 }
 
-func (t *translator) TranslateIngress(ing kube.Ingress, args ...bool) (*TranslateContext, error) {
-	var skipVerify = false
-	if len(args) != 0 {
-		skipVerify = args[0]
-	}
+func (t *translator) TranslateIngress(ing kube.Ingress) (*TranslateContext, error) {
 	switch ing.GroupVersion() {
 	case kube.IngressV1:
-		return t.translateIngressV1(ing.V1(), skipVerify)
+		return t.translateIngressV1(ing.V1())
 	case kube.IngressV1beta1:
-		return t.translateIngressV1beta1(ing.V1beta1(), skipVerify)
+		return t.translateIngressV1beta1(ing.V1beta1())
 	case kube.IngressExtensionsV1beta1:
-		return t.translateIngressExtensionsV1beta1(ing.ExtensionsV1beta1(), skipVerify)
+		return t.translateIngressExtensionsV1beta1(ing.ExtensionsV1beta1())
 	default:
 		return nil, fmt.Errorf("translator: source group version not supported: %s", ing.GroupVersion())
 	}

@@ -21,7 +21,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/apache/apisix-ingress-controller/pkg/id"
-	configv2 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2"
 	"github.com/apache/apisix-ingress-controller/pkg/log"
 	"github.com/apache/apisix-ingress-controller/pkg/types"
 	apisixv1 "github.com/apache/apisix-ingress-controller/pkg/types/apisix/v1"
@@ -30,22 +29,6 @@ import (
 var (
 	_errInvalidAddress = errors.New("address is neither IP or CIDR")
 )
-
-func (t *translator) svc(backend configv2.ApisixRouteStreamBackend, ns string) (string, int32, error) {
-	svc, err := t.ServiceLister.Services(ns).Get(backend.ServiceName)
-	if err != nil {
-		return "", 0, err
-	}
-	svcPort := int32(-1)
-	if backend.ResolveGranularity == "service" && svc.Spec.ClusterIP == "" {
-		log.Errorw("ApisixRoute refers to a headless service but want to use the service level resolve granularity",
-			zap.String("ApisixRoute namespace", ns),
-			zap.Any("service", svc),
-		)
-		return "", 0, errors.New("conflict headless service and backend resolve granularity")
-	}
-	return svc.Spec.ClusterIP, svcPort, nil
-}
 
 // translateUpstreamNotStrictly translates Upstream nodes with a loose way, only generate ID and Name for delete Event.
 func (t *translator) translateUpstreamNotStrictly(namespace, svcName, subset string, svcPort int32) (*apisixv1.Upstream, error) {

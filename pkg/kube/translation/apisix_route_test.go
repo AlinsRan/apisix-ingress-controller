@@ -16,7 +16,6 @@ package translation
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -474,7 +473,6 @@ func TestTranslateApisixRouteV2beta3NotStrictly(t *testing.T) {
 	}
 
 	tx, err := tr.TranslateRouteV2beta3NotStrictly(ar)
-	fmt.Println(tx)
 	assert.NoError(t, err, "translateRoute not strictly should be no error")
 	assert.Equal(t, 2, len(tx.Routes), "There should be 2 routes")
 	assert.Equal(t, 2, len(tx.Upstreams), "There should be 2 upstreams")

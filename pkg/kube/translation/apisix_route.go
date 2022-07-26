@@ -197,7 +197,7 @@ func (t *translator) translateHTTPRouteV2beta2(ctx *TranslateContext, ar *config
 				&UpstreamArg{
 					Namespace:          ar.Namespace,
 					Name:               backend.ServiceName,
-					Port:               backend.ServicePort.IntVal,
+					Port:               backend.ServicePort,
 					Subset:             backend.Subset,
 					ResolveGranularity: backend.ResolveGranularity,
 				})
@@ -331,7 +331,7 @@ func (t *translator) translateHTTPRouteV2beta3(ctx *TranslateContext, ar *config
 				&UpstreamArg{
 					Namespace:          ar.Namespace,
 					Name:               backend.ServiceName,
-					Port:               backend.ServicePort.IntVal,
+					Port:               backend.ServicePort,
 					Subset:             backend.Subset,
 					ResolveGranularity: backend.ResolveGranularity,
 				})
@@ -465,7 +465,7 @@ func (t *translator) translateHTTPRouteV2(ctx *TranslateContext, ar *configv2.Ap
 				&UpstreamArg{
 					Namespace:          ar.Namespace,
 					Name:               backend.ServiceName,
-					Port:               backend.ServicePort.IntVal,
+					Port:               backend.ServicePort,
 					Subset:             backend.Subset,
 					ResolveGranularity: backend.ResolveGranularity,
 				})
@@ -736,7 +736,7 @@ func (t *translator) translateStreamRouteV2beta2(ctx *TranslateContext, ar *conf
 			&UpstreamArg{
 				Namespace:          ar.Namespace,
 				Name:               backend.ServiceName,
-				Port:               backend.ServicePort.IntVal,
+				Port:               backend.ServicePort,
 				Subset:             backend.Subset,
 				ResolveGranularity: backend.ResolveGranularity,
 			})
@@ -769,7 +769,7 @@ func (t *translator) translateStreamRouteV2beta3(ctx *TranslateContext, ar *conf
 			&UpstreamArg{
 				Namespace:          ar.Namespace,
 				Name:               backend.ServiceName,
-				Port:               backend.ServicePort.IntVal,
+				Port:               backend.ServicePort,
 				Subset:             backend.Subset,
 				ResolveGranularity: backend.ResolveGranularity,
 			})
@@ -803,7 +803,7 @@ func (t *translator) translateStreamRouteV2(ctx *TranslateContext, ar *configv2.
 			&UpstreamArg{
 				Namespace:          ar.Namespace,
 				Name:               backend.ServiceName,
-				Port:               backend.ServicePort.IntVal,
+				Port:               backend.ServicePort,
 				Subset:             backend.Subset,
 				ResolveGranularity: backend.ResolveGranularity,
 			})

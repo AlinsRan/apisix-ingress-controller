@@ -210,14 +210,7 @@ func (c *apisixRouteController) sync(ctx context.Context, ev *types.Event) error
 		added = m
 	} else {
 		var oldCtx *translation.TranslateContext
-		switch obj.GroupVersion {
-		case config.ApisixV2beta2:
-			oldCtx, err = c.controller.translator.TranslateRouteV2beta2(obj.OldObject.V2beta2())
-		case config.ApisixV2beta3:
-			oldCtx, err = c.controller.translator.TranslateRouteV2beta3(obj.OldObject.V2beta3())
-		case config.ApisixV2:
-			oldCtx, err = c.controller.translator.TranslateRouteV2(obj.OldObject.V2())
-		}
+		oldCtx, err = c.controller.getOldTranslateContext(ctx, obj.OldObject)
 		// When the old object fails, it should not be retried, but updated directly.
 		if err != nil {
 			log.Debugw("failed to translate old ApisixRoute",
@@ -226,16 +219,15 @@ func (c *apisixRouteController) sync(ctx context.Context, ev *types.Event) error
 				zap.Error(err),
 				zap.Any("ApisixRoute", ar),
 			)
-			updated = m
-		} else {
-			om := &utils.Manifest{
-				Routes:        oldCtx.Routes,
-				Upstreams:     oldCtx.Upstreams,
-				StreamRoutes:  oldCtx.StreamRoutes,
-				PluginConfigs: oldCtx.PluginConfigs,
-			}
-			added, updated, deleted = m.Diff(om)
+			return err
 		}
+		om := &utils.Manifest{
+			Routes:        oldCtx.Routes,
+			Upstreams:     oldCtx.Upstreams,
+			StreamRoutes:  oldCtx.StreamRoutes,
+			PluginConfigs: oldCtx.PluginConfigs,
+		}
+		added, updated, deleted = m.Diff(om)
 	}
 
 	return c.controller.syncManifests(ctx, added, updated, deleted)

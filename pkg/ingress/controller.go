@@ -26,6 +26,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -39,6 +40,7 @@ import (
 	"github.com/apache/apisix-ingress-controller/pkg/apisix"
 	apisixcache "github.com/apache/apisix-ingress-controller/pkg/apisix/cache"
 	"github.com/apache/apisix-ingress-controller/pkg/config"
+	"github.com/apache/apisix-ingress-controller/pkg/id"
 	"github.com/apache/apisix-ingress-controller/pkg/ingress/gateway"
 	"github.com/apache/apisix-ingress-controller/pkg/ingress/namespace"
 	"github.com/apache/apisix-ingress-controller/pkg/ingress/utils"
@@ -613,6 +615,74 @@ func (c *Controller) syncConsumer(ctx context.Context, consumer *apisixv1.Consum
 	return
 }
 
+func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.ApisixRoute) (*translation.TranslateContext, error) {
+	clusterName := c.cfg.APISIX.DefaultClusterName
+	var oldCtx *translation.TranslateContext
+
+	switch c.cfg.Kubernetes.ApisixRouteVersion {
+	case config.ApisixV2beta3:
+		ar := kar.V2beta3()
+		for _, part := range ar.Spec.Stream {
+			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
+			sr, err := c.apisix.Cluster(clusterName).StreamRoute().Get(ctx, id.GenID(name))
+			if err != nil {
+				continue
+			}
+			ups := apisixv1.NewDefaultUpstream()
+			ups.ID = sr.ID
+
+			oldCtx.AddStreamRoute(sr)
+			oldCtx.AddUpstream(ups)
+		}
+		for _, part := range ar.Spec.HTTP {
+			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
+			r, err := c.apisix.Cluster(clusterName).Route().Get(ctx, id.GenID(name))
+			if err != nil {
+				continue
+			}
+
+			ups := apisixv1.NewDefaultUpstream()
+			pc := apisixv1.NewDefaultPluginConfig()
+			ups.ID = r.UpstreamId
+			pc.ID = r.PluginConfigId
+
+			oldCtx.AddRoute(r)
+			oldCtx.AddUpstream(ups)
+			oldCtx.AddPluginConfig(pc)
+		}
+	case config.ApisixV2:
+		ar := kar.V2()
+		for _, part := range ar.Spec.Stream {
+			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
+			sr, err := c.apisix.Cluster(clusterName).StreamRoute().Get(ctx, id.GenID(name))
+			if err != nil {
+				continue
+			}
+			ups := apisixv1.NewDefaultUpstream()
+			ups.ID = sr.ID
+
+			oldCtx.AddStreamRoute(sr)
+			oldCtx.AddUpstream(ups)
+		}
+		for _, part := range ar.Spec.HTTP {
+			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
+			r, err := c.apisix.Cluster(clusterName).Route().Get(ctx, id.GenID(name))
+			if err != nil {
+				continue
+			}
+			ups := apisixv1.NewDefaultUpstream()
+			pc := apisixv1.NewDefaultPluginConfig()
+			ups.ID = r.UpstreamId
+			pc.ID = r.PluginConfigId
+
+			oldCtx.AddRoute(r)
+			oldCtx.AddUpstream(ups)
+			oldCtx.AddPluginConfig(pc)
+		}
+	}
+	return oldCtx, nil
+}
+
 func (c *Controller) syncEndpoint(ctx context.Context, ep kube.Endpoint) error {
 	namespace, err := ep.Namespace()
 	if err != nil {
@@ -649,7 +719,7 @@ func (c *Controller) syncEndpoint(ctx context.Context, ep kube.Endpoint) error {
 					&translation.UpstreamArg{
 						Namespace: namespace,
 						Name:      svcName,
-						Port:      port.Port,
+						Port:      intstr.FromInt(int(port.Port)),
 					},
 				)
 				if err != nil {
@@ -686,7 +756,7 @@ func (c *Controller) syncEndpoint(ctx context.Context, ep kube.Endpoint) error {
 					&translation.UpstreamArg{
 						Namespace: namespace,
 						Name:      svcName,
-						Port:      port.Port,
+						Port:      intstr.FromInt(int(port.Port)),
 					},
 				)
 				if err != nil {

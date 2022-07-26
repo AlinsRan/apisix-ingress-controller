@@ -23,6 +23,7 @@ import (
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/apache/apisix-ingress-controller/pkg/id"
@@ -94,7 +95,7 @@ func (t *translator) TranslateGatewayHTTPRouteV1Alpha2(httpRoute *gatewayv1alpha
 			ups, err := t.KubeTranslator.TranslateUpstream(&translation.UpstreamArg{
 				Namespace: ns,
 				Name:      string(backend.Name),
-				Port:      int32(*backend.Port),
+				Port:      intstr.FromInt(int(*backend.Port)),
 			})
 			if err != nil {
 				return nil, errors.Wrap(err, fmt.Sprintf("failed to translate Rules[%v].BackendRefs[%v]", i, j))

@@ -15,6 +15,7 @@
 package translation
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/apache/apisix-ingress-controller/pkg/id"
@@ -46,10 +47,10 @@ type UpstreamArg struct {
 }
 
 func (t *translator) translateUpstreamV2(arg *UpstreamArg) (*apisixv1.Upstream, error) {
-	au, err := t.ApisixUpstreamLister.V2(arg.Namespace, arg.Name)
 	ups := apisixv1.NewDefaultUpstream()
-	ups.Name = apisixv1.ComposeUpstreamName(arg.Namespace, arg.Name, arg.Subset, arg.Port)
+	ups.Name = apisixv1.ComposeUpstreamName(arg.Namespace, arg.Name, arg.Subset, arg.Port.IntVal)
 	ups.ID = id.GenID(ups.Name)
+	au, err := t.ApisixUpstreamLister.V2(arg.Namespace, ups.Name)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			// If subset in ApisixRoute is not empty but the ApisixUpstream resource not found,
@@ -85,7 +86,7 @@ func (t *translator) translateUpstreamV2(arg *UpstreamArg) (*apisixv1.Upstream, 
 
 	upsCfg := &au.V2().Spec.ApisixUpstreamConfig
 	for _, pls := range au.V2().Spec.PortLevelSettings {
-		if pls.Port == arg.Port {
+		if pls.Port == arg.Port.IntVal {
 			upsCfg = &pls.ApisixUpstreamConfig
 			break
 		}
@@ -99,10 +100,10 @@ func (t *translator) translateUpstreamV2(arg *UpstreamArg) (*apisixv1.Upstream, 
 }
 
 func (t *translator) translateUpstreamV2beta3(arg *UpstreamArg) (*apisixv1.Upstream, error) {
-	au, err := t.ApisixUpstreamLister.V2beta3(arg.Namespace, arg.Name)
 	ups := apisixv1.NewDefaultUpstream()
-	ups.Name = apisixv1.ComposeUpstreamName(arg.Namespace, arg.Name, arg.Subset, arg.Port)
+	ups.Name = apisixv1.ComposeUpstreamName(arg.Namespace, arg.Name, arg.Subset, arg.Port.IntVal)
 	ups.ID = id.GenID(ups.Name)
+	au, err := t.ApisixUpstreamLister.V2(arg.Namespace, ups.Name)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			// If subset in ApisixRoute is not empty but the ApisixUpstream resource not found,
@@ -115,29 +116,6 @@ func (t *translator) translateUpstreamV2beta3(arg *UpstreamArg) (*apisixv1.Upstr
 			return nil, &translateError{
 				field:  "ApisixUpstream",
 				reason: err.Error(),
-			}
-		}
-	}
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			// If subset in ApisixRoute is not empty but the ApisixUpstream resource not found,
-			// just set an empty node list.
-			if arg.Subset != "" {
-				ups.Nodes = apisixv1.UpstreamNodes{}
-				return ups, nil
-			}
-		} else {
-			return nil, &translateError{
-				field:  "ApisixUpstream",
-				reason: err.Error(),
-			}
-		}
-	}
-	if arg.Subset != "" {
-		for _, ss := range au.V2beta3().Spec.Subsets {
-			if ss.Name == arg.Subset {
-				arg.Labels = ss.Labels
-				break
 			}
 		}
 	}
@@ -153,7 +131,7 @@ func (t *translator) translateUpstreamV2beta3(arg *UpstreamArg) (*apisixv1.Upstr
 
 	upsCfg := &au.V2beta3().Spec.ApisixUpstreamConfig
 	for _, pls := range au.V2beta3().Spec.PortLevelSettings {
-		if pls.Port == arg.Port {
+		if pls.Port == arg.Port.IntVal {
 			upsCfg = &pls.ApisixUpstreamConfig
 			break
 		}
@@ -174,31 +152,45 @@ func (t *translator) TranslateUpstreamNodes(arg *UpstreamArg) (apisixv1.Upstream
 			reason: err.Error(),
 		}
 	}
-	nodes := make(apisixv1.UpstreamNodes, 0)
 	var svcPort *corev1.ServicePort
-	for _, exposePort := range svc.Spec.Ports {
-		if exposePort.Port == arg.Port.IntVal || exposePort.Name == arg.Port.StrVal {
-			svcPort = &exposePort
-			break
+	if arg.Port.Type == intstr.String {
+		for _, exposePort := range svc.Spec.Ports {
+			if exposePort.Name == arg.Port.StrVal {
+				svcPort = &exposePort
+				break
+			}
+		}
+	} else {
+		for _, exposePort := range svc.Spec.Ports {
+			if exposePort.Port == arg.Port.IntVal {
+				svcPort = &exposePort
+				break
+			}
 		}
 	}
 	if svcPort == nil {
-		return nodes, nil
+		return nil, &translateError{
+			field:  "service",
+			reason: "port not found",
+		}
 	}
 	if arg.ResolveGranularity == "" {
 		arg.ResolveGranularity = ResolveGranularityEndpoint
 	}
 	switch arg.ResolveGranularity {
 	case ResolveGranularityService:
+		if svc.Spec.ClusterIP == "" {
+			return nil, errors.New("conflict headless service and backend resolve granularity")
+		}
 		return apisixv1.UpstreamNodes{
 			{
 				Host:   svc.Spec.ClusterIP,
-				Port:   int(svc.po),
+				Port:   int(svcPort.Port),
 				Weight: _defaultWeight,
-			}, {},
+			},
 		}, nil
 	case ResolveGranularityEndpoint:
-
+		nodes := make(apisixv1.UpstreamNodes, 0)
 		var (
 			endpoint kube.Endpoint
 			err      error

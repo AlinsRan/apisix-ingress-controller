@@ -16,7 +16,6 @@ package translation
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,7 +31,6 @@ import (
 	configv2 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2"
 	configv2beta3 "github.com/apache/apisix-ingress-controller/pkg/kube/apisix/apis/config/v2beta3"
 	apisixv1 "github.com/apache/apisix-ingress-controller/pkg/types/apisix/v1"
-	v1 "github.com/apache/apisix-ingress-controller/pkg/types/apisix/v1"
 )
 
 func TestTranslateUpstreamConfigV2beta3(t *testing.T) {
@@ -262,17 +260,20 @@ func TestTranslateUpstreamNodes(t *testing.T) {
 		&UpstreamArg{
 			Namespace: endpoints.Namespace,
 			Name:      endpoints.Name,
-			Port:      10080,
+			Port:      intstr.FromInt(10080),
 		},
 	)
-	assert.Nil(t, err)
-	assert.Equal(t, apisixv1.UpstreamNodes{}, nodes)
+	assert.Nil(t, nodes)
+	assert.Equal(t, err, &translateError{
+		field:  "service",
+		reason: "port not found",
+	})
 
 	nodes, err = tr.TranslateUpstreamNodes(
 		&UpstreamArg{
 			Namespace: endpoints.Namespace,
 			Name:      endpoints.Name,
-			Port:      80,
+			Port:      intstr.FromInt(80),
 		},
 	)
 	assert.Nil(t, err)
@@ -293,7 +294,7 @@ func TestTranslateUpstreamNodes(t *testing.T) {
 		&UpstreamArg{
 			Namespace: endpoints.Namespace,
 			Name:      endpoints.Name,
-			Port:      443,
+			Port:      intstr.FromInt(443),
 		},
 	)
 	assert.Nil(t, err)
@@ -419,17 +420,20 @@ func TestTranslateUpstreamNodesWithEndpointSlices(t *testing.T) {
 		&UpstreamArg{
 			Namespace: ep.Namespace,
 			Name:      ep.Name,
-			Port:      10080,
+			Port:      intstr.FromInt(10080),
 		},
 	)
-	assert.Nil(t, err)
-	assert.Equal(t, v1.UpstreamNodes{}, nodes)
-	fmt.Println(ep.Namespace, ep.Name)
+	assert.Nil(t, nodes)
+	assert.Equal(t, err, &translateError{
+		field:  "service",
+		reason: "port not found",
+	})
+
 	nodes, err = tr.TranslateUpstreamNodes(
 		&UpstreamArg{
 			Namespace: ep.Namespace,
 			Name:      ep.Name,
-			Port:      80,
+			Port:      intstr.FromInt(80),
 		},
 	)
 	assert.Nil(t, err)
@@ -450,7 +454,7 @@ func TestTranslateUpstreamNodesWithEndpointSlices(t *testing.T) {
 		&UpstreamArg{
 			Namespace: ep.Namespace,
 			Name:      ep.Name,
-			Port:      intstr.FromInt(),
+			Port:      intstr.FromInt(443),
 		},
 	)
 	assert.Nil(t, err)

@@ -124,7 +124,7 @@ func TestTranslateIngressV1NoBackend(t *testing.T) {
 		},
 	}
 	tr := &translator{}
-	ctx, err := tr.translateIngressV1(ing, false)
+	ctx, err := tr.translateIngressV1(ing)
 	assert.Nil(t, err)
 	assert.Len(t, ctx.Routes, 1)
 	assert.Len(t, ctx.Upstreams, 0)
@@ -172,12 +172,19 @@ func TestTranslateIngressV1BackendWithInvalidService(t *testing.T) {
 	informersFactory := informers.NewSharedInformerFactory(client, 0)
 	svcInformer := informersFactory.Core().V1().Services().Informer()
 	svcLister := informersFactory.Core().V1().Services().Lister()
+	apisixClient := fakeapisix.NewSimpleClientset()
+	apisixInformersFactory := apisixinformers.NewSharedInformerFactory(apisixClient, 0)
 	tr := &translator{
 		TranslatorOptions: &TranslatorOptions{
 			ServiceLister: svcLister,
+			ApisixUpstreamLister: kube.NewApisixUpstreamLister(
+				apisixInformersFactory.Apisix().V2beta3().ApisixUpstreams().Lister(),
+				apisixInformersFactory.Apisix().V2().ApisixUpstreams().Lister(),
+			),
+			APIVersion: config.DefaultAPIVersion,
 		},
 	}
-	ctx, err := tr.translateIngressV1(ing, false)
+	ctx, err := tr.translateIngressV1(ing)
 	assert.NotNil(t, err)
 	assert.Nil(t, ctx)
 	assert.Equal(t, "service \"test-service\" not found", err.Error())
@@ -200,7 +207,7 @@ func TestTranslateIngressV1BackendWithInvalidService(t *testing.T) {
 	assert.Nil(t, err)
 
 	<-processCh
-	ctx, err = tr.translateIngressV1(ing, false)
+	ctx, err = tr.translateIngressV1(ing)
 	assert.Nil(t, ctx, nil)
 	assert.Equal(t, &translateError{
 		field:  "service",
@@ -295,7 +302,7 @@ func testTranslateIngressV1WithRegexReferenceUpstreamVersion(t *testing.T, apiVe
 
 		<-processCh
 		<-processCh
-		ctx, err := tr.translateIngressV1(ing, false)
+		ctx, err := tr.translateIngressV1(ing)
 		assert.Nil(t, err)
 		assert.Len(t, ctx.Routes, 1)
 		assert.Len(t, ctx.Upstreams, 1)
@@ -418,7 +425,7 @@ func testTranslateIngressV1ReferenceUpstreamVersion(t *testing.T, apiVersoin str
 
 		<-processCh
 		<-processCh
-		ctx, err := tr.translateIngressV1(ing, false)
+		ctx, err := tr.translateIngressV1(ing)
 		annoExtractor := annotations.NewExtractor(ing.Annotations)
 		pluginConfigName := annoExtractor.GetStringAnnotation(path.Join(annotations.AnnotationsPrefix, "plugin-config-name"))
 
@@ -482,7 +489,7 @@ func TestTranslateIngressV1beta1NoBackend(t *testing.T) {
 		},
 	}
 	tr := &translator{}
-	ctx, err := tr.translateIngressV1beta1(ing, false)
+	ctx, err := tr.translateIngressV1beta1(ing)
 	assert.Nil(t, err)
 	assert.Len(t, ctx.Routes, 1)
 	assert.Len(t, ctx.Upstreams, 0)
@@ -529,12 +536,19 @@ func TestTranslateIngressV1beta1BackendWithInvalidService(t *testing.T) {
 	informersFactory := informers.NewSharedInformerFactory(client, 0)
 	svcInformer := informersFactory.Core().V1().Services().Informer()
 	svcLister := informersFactory.Core().V1().Services().Lister()
+	apisixClient := fakeapisix.NewSimpleClientset()
+	apisixInformersFactory := apisixinformers.NewSharedInformerFactory(apisixClient, 0)
 	tr := &translator{
 		TranslatorOptions: &TranslatorOptions{
 			ServiceLister: svcLister,
+			ApisixUpstreamLister: kube.NewApisixUpstreamLister(
+				apisixInformersFactory.Apisix().V2beta3().ApisixUpstreams().Lister(),
+				apisixInformersFactory.Apisix().V2().ApisixUpstreams().Lister(),
+			),
+			APIVersion: config.DefaultAPIVersion,
 		},
 	}
-	ctx, err := tr.translateIngressV1beta1(ing, false)
+	ctx, err := tr.translateIngressV1beta1(ing)
 	assert.NotNil(t, err)
 	assert.Nil(t, ctx)
 	assert.Equal(t, "service \"test-service\" not found", err.Error())
@@ -557,7 +571,7 @@ func TestTranslateIngressV1beta1BackendWithInvalidService(t *testing.T) {
 	assert.Nil(t, err)
 
 	<-processCh
-	ctx, err = tr.translateIngressV1beta1(ing, false)
+	ctx, err = tr.translateIngressV1beta1(ing)
 	assert.Nil(t, ctx)
 	assert.Equal(t, &translateError{
 		field:  "service",
@@ -646,7 +660,7 @@ func TestTranslateIngressV1beta1WithRegex(t *testing.T) {
 
 	<-processCh
 	<-processCh
-	ctx, err := tr.translateIngressV1beta1(ing, false)
+	ctx, err := tr.translateIngressV1beta1(ing)
 	assert.Nil(t, err)
 	assert.Len(t, ctx.Routes, 1)
 	assert.Len(t, ctx.Upstreams, 1)
@@ -760,7 +774,7 @@ func TestTranslateIngressV1beta1(t *testing.T) {
 
 	<-processCh
 	<-processCh
-	ctx, err := tr.translateIngressV1beta1(ing, false)
+	ctx, err := tr.translateIngressV1beta1(ing)
 	annoExtractor := annotations.NewExtractor(ing.Annotations)
 	pluginConfigName := annoExtractor.GetStringAnnotation(path.Join(annotations.AnnotationsPrefix, "plugin-config-name"))
 
@@ -891,7 +905,7 @@ func TestTranslateIngressExtensionsV1beta1(t *testing.T) {
 
 	<-processCh
 	<-processCh
-	ctx, err := tr.translateIngressExtensionsV1beta1(ing, false)
+	ctx, err := tr.translateIngressExtensionsV1beta1(ing)
 	annoExtractor := annotations.NewExtractor(ing.Annotations)
 	pluginConfigName := annoExtractor.GetStringAnnotation(path.Join(annotations.AnnotationsPrefix, "plugin-config-name"))
 
@@ -965,12 +979,19 @@ func TestTranslateIngressExtensionsV1beta1BackendWithInvalidService(t *testing.T
 	informersFactory := informers.NewSharedInformerFactory(client, 0)
 	svcInformer := informersFactory.Core().V1().Services().Informer()
 	svcLister := informersFactory.Core().V1().Services().Lister()
+	apisixClient := fakeapisix.NewSimpleClientset()
+	apisixInformersFactory := apisixinformers.NewSharedInformerFactory(apisixClient, 0)
 	tr := &translator{
 		TranslatorOptions: &TranslatorOptions{
 			ServiceLister: svcLister,
+			ApisixUpstreamLister: kube.NewApisixUpstreamLister(
+				apisixInformersFactory.Apisix().V2beta3().ApisixUpstreams().Lister(),
+				apisixInformersFactory.Apisix().V2().ApisixUpstreams().Lister(),
+			),
+			APIVersion: config.DefaultAPIVersion,
 		},
 	}
-	ctx, err := tr.translateIngressExtensionsV1beta1(ing, false)
+	ctx, err := tr.translateIngressExtensionsV1beta1(ing)
 	assert.Nil(t, ctx)
 	assert.NotNil(t, err)
 	assert.Equal(t, "service \"test-service\" not found", err.Error())
@@ -993,7 +1014,7 @@ func TestTranslateIngressExtensionsV1beta1BackendWithInvalidService(t *testing.T
 	assert.Nil(t, err)
 
 	<-processCh
-	ctx, err = tr.translateIngressExtensionsV1beta1(ing, false)
+	ctx, err = tr.translateIngressExtensionsV1beta1(ing)
 	assert.Nil(t, ctx)
 	assert.Equal(t, &translateError{
 		field:  "service",
@@ -1081,7 +1102,7 @@ func TestTranslateIngressExtensionsV1beta1WithRegex(t *testing.T) {
 
 	<-processCh
 	<-processCh
-	ctx, err := tr.translateIngressExtensionsV1beta1(ing, false)
+	ctx, err := tr.translateIngressExtensionsV1beta1(ing)
 	assert.Nil(t, err)
 	assert.Len(t, ctx.Routes, 1)
 	assert.Len(t, ctx.Upstreams, 1)
@@ -1183,7 +1204,7 @@ func TestTranslateIngressV1WithWebsocket(t *testing.T) {
 
 	<-processCh
 	<-processCh
-	ctx, err := tr.translateIngressV1(ing, false)
+	ctx, err := tr.translateIngressV1(ing)
 	assert.Nil(t, err)
 	assert.Len(t, ctx.Routes, 1)
 	assert.Len(t, ctx.Upstreams, 1)
@@ -1274,7 +1295,7 @@ func TestTranslateIngressV1beta1WithWebsocket(t *testing.T) {
 
 	<-processCh
 	<-processCh
-	ctx, err := tr.translateIngressV1beta1(ing, false)
+	ctx, err := tr.translateIngressV1beta1(ing)
 	assert.Nil(t, err)
 	assert.Len(t, ctx.Routes, 1)
 	assert.Len(t, ctx.Upstreams, 1)
@@ -1365,7 +1386,7 @@ func TestTranslateIngressExtensionsV1beta1WithWebsocket(t *testing.T) {
 
 	<-processCh
 	<-processCh
-	ctx, err := tr.translateIngressExtensionsV1beta1(ing, false)
+	ctx, err := tr.translateIngressExtensionsV1beta1(ing)
 	assert.Nil(t, err)
 	assert.Len(t, ctx.Routes, 1)
 	assert.Len(t, ctx.Upstreams, 1)
