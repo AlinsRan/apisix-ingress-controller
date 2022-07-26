@@ -40,7 +40,6 @@ import (
 	"github.com/apache/apisix-ingress-controller/pkg/apisix"
 	apisixcache "github.com/apache/apisix-ingress-controller/pkg/apisix/cache"
 	"github.com/apache/apisix-ingress-controller/pkg/config"
-	"github.com/apache/apisix-ingress-controller/pkg/id"
 	"github.com/apache/apisix-ingress-controller/pkg/ingress/gateway"
 	"github.com/apache/apisix-ingress-controller/pkg/ingress/namespace"
 	"github.com/apache/apisix-ingress-controller/pkg/ingress/utils"
@@ -615,16 +614,18 @@ func (c *Controller) syncConsumer(ctx context.Context, consumer *apisixv1.Consum
 	return
 }
 
+// Building objects from cache
+// For old objects, you cannot use TranslateRoute to build. Because it needs to parse the latest service, which will cause data inconsistency
 func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.ApisixRoute) (*translation.TranslateContext, error) {
 	clusterName := c.cfg.APISIX.DefaultClusterName
-	var oldCtx *translation.TranslateContext
+	oldCtx := translation.DefaultEmptyTranslateContext()
 
 	switch c.cfg.Kubernetes.ApisixRouteVersion {
 	case config.ApisixV2beta3:
 		ar := kar.V2beta3()
 		for _, part := range ar.Spec.Stream {
 			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
-			sr, err := c.apisix.Cluster(clusterName).StreamRoute().Get(ctx, id.GenID(name))
+			sr, err := c.apisix.Cluster(clusterName).StreamRoute().Get(ctx, name)
 			if err != nil {
 				continue
 			}
@@ -635,8 +636,8 @@ func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.Apisix
 			oldCtx.AddUpstream(ups)
 		}
 		for _, part := range ar.Spec.HTTP {
-			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
-			r, err := c.apisix.Cluster(clusterName).Route().Get(ctx, id.GenID(name))
+			name := apisixv1.ComposeRouteName(ar.Namespace, ar.Name, part.Name)
+			r, err := c.apisix.Cluster(clusterName).Route().Get(ctx, name)
 			if err != nil {
 				continue
 			}
@@ -654,7 +655,7 @@ func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.Apisix
 		ar := kar.V2()
 		for _, part := range ar.Spec.Stream {
 			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
-			sr, err := c.apisix.Cluster(clusterName).StreamRoute().Get(ctx, id.GenID(name))
+			sr, err := c.apisix.Cluster(clusterName).StreamRoute().Get(ctx, name)
 			if err != nil {
 				continue
 			}
@@ -665,8 +666,8 @@ func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.Apisix
 			oldCtx.AddUpstream(ups)
 		}
 		for _, part := range ar.Spec.HTTP {
-			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
-			r, err := c.apisix.Cluster(clusterName).Route().Get(ctx, id.GenID(name))
+			name := apisixv1.ComposeRouteName(ar.Namespace, ar.Name, part.Name)
+			r, err := c.apisix.Cluster(clusterName).Route().Get(ctx, name)
 			if err != nil {
 				continue
 			}

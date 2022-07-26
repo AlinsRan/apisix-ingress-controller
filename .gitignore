@@ -39,3 +39,4 @@ apisix-ingress-controller
 .actions/openwhisk-utilities
 
 .generated
+*.log
