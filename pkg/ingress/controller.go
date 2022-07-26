@@ -629,11 +629,12 @@ func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.Apisix
 			if err != nil {
 				continue
 			}
-			ups := apisixv1.NewDefaultUpstream()
-			ups.ID = sr.ID
-
+			if sr.UpstreamId != "" {
+				ups := apisixv1.NewDefaultUpstream()
+				ups.ID = sr.UpstreamId
+				oldCtx.AddUpstream(ups)
+			}
 			oldCtx.AddStreamRoute(sr)
-			oldCtx.AddUpstream(ups)
 		}
 		for _, part := range ar.Spec.HTTP {
 			name := apisixv1.ComposeRouteName(ar.Namespace, ar.Name, part.Name)
@@ -641,15 +642,17 @@ func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.Apisix
 			if err != nil {
 				continue
 			}
-
-			ups := apisixv1.NewDefaultUpstream()
-			pc := apisixv1.NewDefaultPluginConfig()
-			ups.ID = r.UpstreamId
-			pc.ID = r.PluginConfigId
-
+			if r.UpstreamId != "" {
+				ups := apisixv1.NewDefaultUpstream()
+				ups.ID = r.UpstreamId
+				oldCtx.AddUpstream(ups)
+			}
+			if r.PluginConfigId != "" {
+				pc := apisixv1.NewDefaultPluginConfig()
+				pc.ID = r.PluginConfigId
+				oldCtx.AddPluginConfig(pc)
+			}
 			oldCtx.AddRoute(r)
-			oldCtx.AddUpstream(ups)
-			oldCtx.AddPluginConfig(pc)
 		}
 	case config.ApisixV2:
 		ar := kar.V2()
@@ -659,11 +662,12 @@ func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.Apisix
 			if err != nil {
 				continue
 			}
-			ups := apisixv1.NewDefaultUpstream()
-			ups.ID = sr.ID
-
+			if sr.UpstreamId != "" {
+				ups := apisixv1.NewDefaultUpstream()
+				ups.ID = sr.UpstreamId
+				oldCtx.AddUpstream(ups)
+			}
 			oldCtx.AddStreamRoute(sr)
-			oldCtx.AddUpstream(ups)
 		}
 		for _, part := range ar.Spec.HTTP {
 			name := apisixv1.ComposeRouteName(ar.Namespace, ar.Name, part.Name)
@@ -671,14 +675,18 @@ func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.Apisix
 			if err != nil {
 				continue
 			}
-			ups := apisixv1.NewDefaultUpstream()
-			pc := apisixv1.NewDefaultPluginConfig()
-			ups.ID = r.UpstreamId
-			pc.ID = r.PluginConfigId
-
+			if r.UpstreamId != "" {
+				ups := apisixv1.NewDefaultUpstream()
+				ups.ID = r.UpstreamId
+				oldCtx.AddUpstream(ups)
+			}
+			if r.PluginConfigId != "" {
+				pc := apisixv1.NewDefaultPluginConfig()
+				pc.ID = r.PluginConfigId
+				oldCtx.AddPluginConfig(pc)
+			}
 			oldCtx.AddRoute(r)
-			oldCtx.AddUpstream(ups)
-			oldCtx.AddPluginConfig(pc)
+
 		}
 	}
 	return oldCtx, nil

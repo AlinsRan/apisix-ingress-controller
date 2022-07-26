@@ -50,7 +50,7 @@ func (t *translator) translateUpstreamV2(arg *UpstreamArg) (*apisixv1.Upstream, 
 	ups := apisixv1.NewDefaultUpstream()
 	ups.Name = apisixv1.ComposeUpstreamName(arg.Namespace, arg.Name, arg.Subset, arg.Port.IntVal)
 	ups.ID = id.GenID(ups.Name)
-	au, err := t.ApisixUpstreamLister.V2(arg.Namespace, ups.Name)
+	au, err := t.ApisixUpstreamLister.V2(arg.Namespace, arg.Name)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			// If subset in ApisixRoute is not empty but the ApisixUpstream resource not found,
@@ -96,6 +96,8 @@ func (t *translator) translateUpstreamV2(arg *UpstreamArg) (*apisixv1.Upstream, 
 		return nil, err
 	}
 	ups.Nodes = nodes
+	ups.Name = apisixv1.ComposeUpstreamName(arg.Namespace, arg.Name, arg.Subset, arg.Port.IntVal)
+	ups.ID = id.GenID(ups.Name)
 	return ups, nil
 }
 
@@ -103,7 +105,8 @@ func (t *translator) translateUpstreamV2beta3(arg *UpstreamArg) (*apisixv1.Upstr
 	ups := apisixv1.NewDefaultUpstream()
 	ups.Name = apisixv1.ComposeUpstreamName(arg.Namespace, arg.Name, arg.Subset, arg.Port.IntVal)
 	ups.ID = id.GenID(ups.Name)
-	au, err := t.ApisixUpstreamLister.V2(arg.Namespace, ups.Name)
+
+	au, err := t.ApisixUpstreamLister.V2beta3(arg.Namespace, arg.Name)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			// If subset in ApisixRoute is not empty but the ApisixUpstream resource not found,
@@ -116,6 +119,14 @@ func (t *translator) translateUpstreamV2beta3(arg *UpstreamArg) (*apisixv1.Upstr
 			return nil, &translateError{
 				field:  "ApisixUpstream",
 				reason: err.Error(),
+			}
+		}
+	}
+	if arg.Subset != "" {
+		for _, ss := range au.V2beta3().Spec.Subsets {
+			if ss.Name == arg.Subset {
+				arg.Labels = ss.Labels
+				break
 			}
 		}
 	}
@@ -141,6 +152,8 @@ func (t *translator) translateUpstreamV2beta3(arg *UpstreamArg) (*apisixv1.Upstr
 		return nil, err
 	}
 	ups.Nodes = nodes
+	ups.Name = apisixv1.ComposeUpstreamName(arg.Namespace, arg.Name, arg.Subset, arg.Port.IntVal)
+	ups.ID = id.GenID(ups.Name)
 	return ups, nil
 }
 
