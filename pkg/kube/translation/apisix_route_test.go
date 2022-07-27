@@ -283,6 +283,7 @@ func mockTranslatorV2beta3(t *testing.T) (*translator, <-chan struct{}) {
 	go svcInformer.Run(stopCh)
 	go epInformer.Run(stopCh)
 	cache.WaitForCacheSync(stopCh, svcInformer.HasSynced)
+	cache.WaitForCacheSync(stopCh, epInformer.HasSynced)
 
 	return tr, processCh
 }

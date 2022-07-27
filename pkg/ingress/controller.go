@@ -614,84 +614,6 @@ func (c *Controller) syncConsumer(ctx context.Context, consumer *apisixv1.Consum
 	return
 }
 
-// Building objects from cache
-// For old objects, you cannot use TranslateRoute to build. Because it needs to parse the latest service, which will cause data inconsistency
-func (c *Controller) getOldTranslateContext(ctx context.Context, kar kube.ApisixRoute) (*translation.TranslateContext, error) {
-	clusterName := c.cfg.APISIX.DefaultClusterName
-	oldCtx := translation.DefaultEmptyTranslateContext()
-
-	switch c.cfg.Kubernetes.ApisixRouteVersion {
-	case config.ApisixV2beta3:
-		ar := kar.V2beta3()
-		for _, part := range ar.Spec.Stream {
-			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
-			sr, err := c.apisix.Cluster(clusterName).StreamRoute().Get(ctx, name)
-			if err != nil {
-				continue
-			}
-			if sr.UpstreamId != "" {
-				ups := apisixv1.NewDefaultUpstream()
-				ups.ID = sr.UpstreamId
-				oldCtx.AddUpstream(ups)
-			}
-			oldCtx.AddStreamRoute(sr)
-		}
-		for _, part := range ar.Spec.HTTP {
-			name := apisixv1.ComposeRouteName(ar.Namespace, ar.Name, part.Name)
-			r, err := c.apisix.Cluster(clusterName).Route().Get(ctx, name)
-			if err != nil {
-				continue
-			}
-			if r.UpstreamId != "" {
-				ups := apisixv1.NewDefaultUpstream()
-				ups.ID = r.UpstreamId
-				oldCtx.AddUpstream(ups)
-			}
-			if r.PluginConfigId != "" {
-				pc := apisixv1.NewDefaultPluginConfig()
-				pc.ID = r.PluginConfigId
-				oldCtx.AddPluginConfig(pc)
-			}
-			oldCtx.AddRoute(r)
-		}
-	case config.ApisixV2:
-		ar := kar.V2()
-		for _, part := range ar.Spec.Stream {
-			name := apisixv1.ComposeStreamRouteName(ar.Namespace, ar.Name, part.Name)
-			sr, err := c.apisix.Cluster(clusterName).StreamRoute().Get(ctx, name)
-			if err != nil {
-				continue
-			}
-			if sr.UpstreamId != "" {
-				ups := apisixv1.NewDefaultUpstream()
-				ups.ID = sr.UpstreamId
-				oldCtx.AddUpstream(ups)
-			}
-			oldCtx.AddStreamRoute(sr)
-		}
-		for _, part := range ar.Spec.HTTP {
-			name := apisixv1.ComposeRouteName(ar.Namespace, ar.Name, part.Name)
-			r, err := c.apisix.Cluster(clusterName).Route().Get(ctx, name)
-			if err != nil {
-				continue
-			}
-			if r.UpstreamId != "" {
-				ups := apisixv1.NewDefaultUpstream()
-				ups.ID = r.UpstreamId
-				oldCtx.AddUpstream(ups)
-			}
-			if r.PluginConfigId != "" {
-				pc := apisixv1.NewDefaultPluginConfig()
-				pc.ID = r.PluginConfigId
-				oldCtx.AddPluginConfig(pc)
-			}
-			oldCtx.AddRoute(r)
-
-		}
-	}
-	return oldCtx, nil
-}
-
 func (c *Controller) syncEndpoint(ctx context.Context, ep kube.Endpoint) error {
 	namespace, err := ep.Namespace()
 	if err != nil {
@@ -729,6 +651,7 @@ func (c *Controller) syncEndpoint(ctx context.Context, ep kube.Endpoint) error {
 						Namespace: namespace,
 						Name:      svcName,
 						Port:      intstr.FromInt(int(port.Port)),
+						Labels:    subset.Labels,
 					},
 				)
 				if err != nil {
@@ -766,6 +689,7 @@ func (c *Controller) syncEndpoint(ctx context.Context, ep kube.Endpoint) error {
 						Namespace: namespace,
 						Name:      svcName,
 						Port:      intstr.FromInt(int(port.Port)),
+						Labels:    subset.Labels,
 					},
 				)
 				if err != nil {

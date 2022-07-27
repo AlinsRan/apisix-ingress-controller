@@ -326,7 +326,25 @@ func (c *apisixRouteController) sync(ctx context.Context, ev *types.Event) error
 	} else if ev.Type == types.EventAdd {
 		added = m
 	} else {
-		oldCtx, _ := c.controller.getOldTranslateContext(ctx, obj.OldObject)
+		var oldCtx *translation.TranslateContext
+		switch obj.GroupVersion {
+		case config.ApisixV2beta2:
+			oldCtx, err = c.controller.translator.TranslateRouteV2beta2(obj.OldObject.V2beta2())
+		case config.ApisixV2beta3:
+			oldCtx, err = c.controller.translator.TranslateRouteV2beta3(obj.OldObject.V2beta3())
+		case config.ApisixV2:
+			oldCtx, err = c.controller.translator.TranslateRouteV2(obj.OldObject.V2())
+		}
+		if err != nil {
+			log.Errorw("failed to translate old ApisixRoute",
+				zap.String("version", obj.GroupVersion),
+				zap.String("event", "update"),
+				zap.Error(err),
+				zap.Any("ApisixRoute", ar),
+			)
+			return err
+		}
+
 		om := &utils.Manifest{
 			Routes:        oldCtx.Routes,
 			Upstreams:     oldCtx.Upstreams,
