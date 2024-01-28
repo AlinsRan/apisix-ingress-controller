@@ -26,10 +26,10 @@ updates:
     labels:
       - "area/dependencies"
     reviewers:
-      - "tao12345666333"
-      - "lingsamuel"
       - "AlinsRan"
       - "Gallardot"
+      - "Revolyssup"
+      - "shreemaan-abhishek"
   - package-ecosystem: "github-actions"
     directory: "/.github"
     schedule:
@@ -37,10 +37,10 @@ updates:
     labels:
       - "area/dependencies"
     reviewers:
-      - "tao12345666333"
-      - "lingsamuel"
       - "AlinsRan"
       - "Gallardot"
+      - "Revolyssup"
+      - "shreemaan-abhishek"
   - package-ecosystem: "gomod"
     directory: "/test/e2e"
     schedule:
@@ -48,7 +48,7 @@ updates:
     labels:
       - "area/dependencies"
     reviewers:
-      - "tao12345666333"
-      - "lingsamuel"
       - "AlinsRan"
       - "Gallardot"
+      - "Revolyssup"
+      - "shreemaan-abhishek"
