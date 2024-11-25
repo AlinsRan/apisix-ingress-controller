@@ -10,7 +10,7 @@ require (
 	github.com/gorilla/websocket v1.5.1
 	github.com/gruntwork-io/terratest v0.40.22
 	github.com/onsi/ginkgo/v2 v2.13.0
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.26.0
 	k8s.io/api v0.28.3
 	k8s.io/apimachinery v0.28.3
