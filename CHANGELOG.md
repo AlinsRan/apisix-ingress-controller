@@ -51,15 +51,25 @@ This is a feature release.
 ## Highlights
 
 This release contains following new features:
-- feat: add skip_mtls_uri_regex support for ApisixTls 
-- feat: add support for multiple labels with same key 
-- feat: Allow merging nested values in plugin config secretRef 
-- feat: allow configuring timeout and retries for upstream with ingress 
 
-And also contains few bug fixes along with an upgrade of etcd-adapter package.
+- feat: add skip_mtls_uri_regex support for ApisixTls
+- feat: add support for multiple labels with same key
+- feat: Allow merging nested values in plugin config secretRef
+- feat: allow configuring timeout and retries for upstream with ingress
 
-Please try out the release binaries and report any issues at
-https://github.com/apache/apisix-ingress-controller/issues.
+**Add Gateway API Extensions `apisix.apache.org/v1alpha1`**
+
+Enable additional features not included in the standard Kubernetes Gateway API, developed and maintained by Gateway API implementers to extend functionality securely and reliably.
+
+* GatewayProxy: Defines connection settings between the APISIX Ingress Controller and APISIX, including auth, endpoints, and global plugins. Referenced via parametersRef in Gateway, GatewayClass, or IngressClass
+
+* BackendTrafficPolicy: Defines traffic management settings for backend services, including load balancing, timeouts, retries, and host header handling in the APISIX Ingress Controller.
+
+* Consumer: Defines API consumers and their credentials, enabling authentication and plugin configuration for controlling access to API endpoints.
+
+* PluginConfig: Defines reusable plugin configurations that can be referenced by other resources like HTTPRoute, enabling separation of routing logic and plugin settings for better reusability and manageability.
+
+* HTTPRoutePolicy: Configures advanced traffic management and routing policies for HTTPRoute or Ingress resources, enhancing functionality without modifying the original resources.
 
 ### Contributors
 
@@ -67,22 +77,20 @@ https://github.com/apache/apisix-ingress-controller/issues.
 * AlinsRan
 
 ### Changes
-<details><summary>11 commits</summary>
-<p>
 
-  * [`0db882d`](https://github.com/apache/apisix-ingress-controller/commit/0db882d66d5b9dfb7dc9dd9d2045d4709b1c6ed2) chore: remove useless example files in dockerfile (#2434)
-  * [`11ecb35`](https://github.com/apache/apisix-ingress-controller/commit/11ecb353d074b7392046d08e52bc824a3eeb6ee7) fix: set default provider type (#2436)
-  * [`16f9d60`](https://github.com/apache/apisix-ingress-controller/commit/16f9d609ad63a9ff1d11aa1d1dfceaf89a603a60) fix(crd): missing shortname and printcolumn (#2435)
-  * [`e6fa3b8`](https://github.com/apache/apisix-ingress-controller/commit/e6fa3b845ed30a077d2f2235790701d9653e0403) chore: upgrade adc to 0.20.0 (#2432)
-  * [`03877e0`](https://github.com/apache/apisix-ingress-controller/commit/03877e06abbdf8fda712c65a9f0f6613bdbf5f59) fix(ci): run e2e group by resource api group (#2431)
-  * [`b21d429`](https://github.com/apache/apisix-ingress-controller/commit/b21d429a5efea0571bb0e9f4b5a1633e578d0ce9) chore: revert release-src cmd in makefile (#2433)
-  * [`5588c00`](https://github.com/apache/apisix-ingress-controller/commit/5588c00f116d86daea268a43b3adfc1023ad6a03) docs: update resources and overview (#2430)
-  * [`67ad69a`](https://github.com/apache/apisix-ingress-controller/commit/67ad69ab2fe84cc439b0a95dd20132108b596a60) chore: remove charts folder (#2428)
-  * [`c7d7732`](https://github.com/apache/apisix-ingress-controller/commit/c7d77325a46d9c158e21a0562db7164c7fa34bd9) chore: remove useless provider (#2429)
-  * [`cfa8fd5`](https://github.com/apache/apisix-ingress-controller/commit/cfa8fd5159ef8c899dfc7d311365e26c6f2392e1) feat: support apisix provider type and add ingress docs (#2427)
-  * [`756ed51`](https://github.com/apache/apisix-ingress-controller/commit/756ed51df778d44b61df7e5c3b78bd2dd9c8afbe) refactor: new apisix ingress controller (#2421)
-</p>
-</details>
+**Please refer to [2.0.0 Key Changes](https://github.com/apache/apisix-ingress-controller/blob/0db882d66d5b9dfb7dc9dd9d2045d4709b1c6ed2/docs/upgrade-guide.md#upgrading-from-1xx-to-200-key-changes-and-considerations) for information on key changes.**
+
+* [`0db882d`](https://github.com/apache/apisix-ingress-controller/commit/0db882d66d5b9dfb7dc9dd9d2045d4709b1c6ed2) chore: remove useless example files in dockerfile (#2434)
+* [`11ecb35`](https://github.com/apache/apisix-ingress-controller/commit/11ecb353d074b7392046d08e52bc824a3eeb6ee7) fix: set default provider type (#2436)
+* [`16f9d60`](https://github.com/apache/apisix-ingress-controller/commit/16f9d609ad63a9ff1d11aa1d1dfceaf89a603a60) fix(crd): missing shortname and printcolumn (#2435)
+* [`e6fa3b8`](https://github.com/apache/apisix-ingress-controller/commit/e6fa3b845ed30a077d2f2235790701d9653e0403) chore: upgrade adc to 0.20.0 (#2432)
+* [`03877e0`](https://github.com/apache/apisix-ingress-controller/commit/03877e06abbdf8fda712c65a9f0f6613bdbf5f59) fix(ci): run e2e group by resource api group (#2431)
+* [`b21d429`](https://github.com/apache/apisix-ingress-controller/commit/b21d429a5efea0571bb0e9f4b5a1633e578d0ce9) chore: revert release-src cmd in makefile (#2433)
+* [`5588c00`](https://github.com/apache/apisix-ingress-controller/commit/5588c00f116d86daea268a43b3adfc1023ad6a03) docs: update resources and overview (#2430)
+* [`67ad69a`](https://github.com/apache/apisix-ingress-controller/commit/67ad69ab2fe84cc439b0a95dd20132108b596a60) chore: remove charts folder (#2428)
+* [`c7d7732`](https://github.com/apache/apisix-ingress-controller/commit/c7d77325a46d9c158e21a0562db7164c7fa34bd9) chore: remove useless provider (#2429)
+* [`cfa8fd5`](https://github.com/apache/apisix-ingress-controller/commit/cfa8fd5159ef8c899dfc7d311365e26c6f2392e1) feat: support apisix provider type and add ingress docs (#2427)
+* [`756ed51`](https://github.com/apache/apisix-ingress-controller/commit/756ed51df778d44b61df7e5c3b78bd2dd9c8afbe) refactor: new apisix ingress controller (#2421)
 
 ### Dependency Changes
 
@@ -221,7 +229,6 @@ https://github.com/apache/apisix-ingress-controller/issues.
 * **sigs.k8s.io/yaml**                                                 v1.3.0 -> v1.4.0
 
 Previous release can be found at [v1.8.4](https://github.com/apache/apisix-ingress-controller/releases/tag/v1.8.4)
-
 
 # 1.8.0
 
