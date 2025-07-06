@@ -122,6 +122,11 @@ func (s *APISIXDeployer) AfterEach() {
 		if output != "" {
 			_, _ = fmt.Fprintln(GinkgoWriter, output)
 		}
+		apisixoutput := s.GetDeploymentLogs("apisix")
+		if apisixoutput != "" {
+			_, _ = fmt.Fprintln(GinkgoWriter, apisixoutput)
+		}
+		return
 	}
 
 	// Delete all additional gateways
@@ -250,11 +255,17 @@ func (s *APISIXDeployer) deployDataplane(opts *APISIXDeployOptions) *corev1.Serv
 	return svc
 }
 
+func (s *APISIXDeployer) ScaleDataplane(replicas int) {
+	s.DeployDataplane(DeployDataplaneOptions{
+		Replicas: ptr.To(replicas),
+	})
+}
+
 func (s *APISIXDeployer) DeployIngress() {
 	s.Framework.DeployIngress(framework.IngressDeployOpts{
 		ControllerName:     s.opts.ControllerName,
 		ProviderType:       framework.ProviderType,
-		ProviderSyncPeriod: 200 * time.Millisecond,
+		ProviderSyncPeriod: 1 * time.Second,
 		Namespace:          s.namespace,
 		Replicas:           1,
 	})
@@ -264,7 +275,7 @@ func (s *APISIXDeployer) ScaleIngress(replicas int) {
 	s.Framework.DeployIngress(framework.IngressDeployOpts{
 		ControllerName:     s.opts.ControllerName,
 		ProviderType:       framework.ProviderType,
-		ProviderSyncPeriod: 200 * time.Millisecond,
+		ProviderSyncPeriod: 1 * time.Second,
 		Namespace:          s.namespace,
 		Replicas:           replicas,
 	})
