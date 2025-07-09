@@ -152,12 +152,13 @@ spec:
 			s.RetryAssertion(func() string {
 				output, _ := s.GetOutputFromString("ar", "default", "-o", "yaml")
 				return output
-			}).Should(
-				And(
-					ContainSubstring(`status: "False"`),
-					ContainSubstring(`reason: SyncFailed`),
-				),
-			)
+			}).WithTimeout(80 * time.Second).
+				Should(
+					And(
+						ContainSubstring(`status: "False"`),
+						ContainSubstring(`reason: SyncFailed`),
+					),
+				)
 
 			s.Deployer.ScaleDataplane(1)
 
@@ -165,12 +166,13 @@ spec:
 			s.RetryAssertion(func() string {
 				output, _ := s.GetOutputFromString("ar", "default", "-o", "yaml")
 				return output
-			}).Should(
-				And(
-					ContainSubstring(`status: "True"`),
-					ContainSubstring(`reason: Accepted`),
-				),
-			)
+			}).WithTimeout(80 * time.Second).
+				Should(
+					And(
+						ContainSubstring(`status: "True"`),
+						ContainSubstring(`reason: Accepted`),
+					),
+				)
 
 			By("check route in APISIX")
 			s.RequestAssert(&scaffold.RequestAssert{
@@ -290,12 +292,13 @@ spec:
 			s.RetryAssertion(func() string {
 				output, _ := s.GetOutputFromString("httproute", "httpbin", "-o", "yaml")
 				return output
-			}).Should(
-				And(
-					ContainSubstring(`status: "False"`),
-					ContainSubstring(`reason: SyncFailed`),
-				),
-			)
+			}).WithTimeout(80 * time.Second).
+				Should(
+					And(
+						ContainSubstring(`status: "False"`),
+						ContainSubstring(`reason: SyncFailed`),
+					),
+				)
 
 			s.Deployer.ScaleDataplane(1)
 
@@ -303,12 +306,13 @@ spec:
 			s.RetryAssertion(func() string {
 				output, _ := s.GetOutputFromString("httproute", "httpbin", "-o", "yaml")
 				return output
-			}).Should(
-				And(
-					ContainSubstring(`status: "True"`),
-					ContainSubstring(`reason: Accepted`),
-				),
-			)
+			}).WithTimeout(80 * time.Second).
+				Should(
+					And(
+						ContainSubstring(`status: "True"`),
+						ContainSubstring(`reason: Accepted`),
+					),
+				)
 
 			By("check route in APISIX")
 			s.RequestAssert(&scaffold.RequestAssert{

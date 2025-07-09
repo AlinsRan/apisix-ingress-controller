@@ -80,6 +80,21 @@ func (c *RequestAssert) request(method, path string, body []byte) *httpexpect.Re
 	}
 }
 
+func (c *RequestAssert) WithCheck(check ResponseCheckFunc) *RequestAssert {
+	c.Checks = append(c.Checks, check)
+	return c
+}
+
+func (c *RequestAssert) WithChecks(checks ...ResponseCheckFunc) *RequestAssert {
+	c.Checks = append(c.Checks, checks...)
+	return c
+}
+
+func (c *RequestAssert) SetChecks(checks ...ResponseCheckFunc) *RequestAssert {
+	c.Checks = checks
+	return c
+}
+
 func WithExpectedStatus(status int) ResponseCheckFunc {
 	return func(resp *HTTPResponse) error {
 		if resp.StatusCode != status {

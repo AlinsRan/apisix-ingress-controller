@@ -285,56 +285,36 @@ spec:
 
 		BeforeEach(beforeEach)
 		It("should rewrite upstream host", func() {
-			s.ResourceApplied("BackendTrafficPolicy", "httpbin", createUpstreamHost, 1)
-			s.RequestAssert(&scaffold.RequestAssert{
+			reqAssert := &scaffold.RequestAssert{
 				Method: "GET",
 				Path:   "/headers",
 				Host:   "httpbin.org",
 				Headers: map[string]string{
 					"Host": "httpbin.org",
 				},
-				Checks: []scaffold.ResponseCheckFunc{
-					scaffold.WithExpectedStatus(200),
-					scaffold.WithExpectedBodyContains(
-						"httpbin.example.com",
-					),
-				},
-			})
+			}
+			s.ResourceApplied("BackendTrafficPolicy", "httpbin", createUpstreamHost, 1)
+			s.RequestAssert(reqAssert.SetChecks(
+				scaffold.WithExpectedStatus(200),
+				scaffold.WithExpectedBodyContains("httpbin.example.com"),
+			))
 
 			s.ResourceApplied("BackendTrafficPolicy", "httpbin", updateUpstreamHost, 2)
-			s.RequestAssert(&scaffold.RequestAssert{
-				Method: "GET",
-				Path:   "/headers",
-				Host:   "httpbin.org",
-				Headers: map[string]string{
-					"Host": "httpbin.org",
-				},
-				Checks: []scaffold.ResponseCheckFunc{
-					scaffold.WithExpectedStatus(200),
-					scaffold.WithExpectedBodyContains(
-						"httpbin.update.example.com",
-					),
-				},
-			})
+			s.RequestAssert(reqAssert.SetChecks(
+				scaffold.WithExpectedStatus(200),
+				scaffold.WithExpectedBodyContains("httpbin.update.example.com"),
+			))
 
 			err := s.DeleteResourceFromString(createUpstreamHost)
 			Expect(err).NotTo(HaveOccurred(), "deleting BackendTrafficPolicy")
 
-			s.RequestAssert(&scaffold.RequestAssert{
-				Method: "GET",
-				Path:   "/headers",
-				Host:   "httpbin.org",
-				Headers: map[string]string{
-					"Host": "httpbin.org",
-				},
-				Checks: []scaffold.ResponseCheckFunc{
-					scaffold.WithExpectedStatus(200),
-					scaffold.WithExpectedBodyNotContains(
-						"httpbin.update.example.com",
-						"httpbin.example.com",
-					),
-				},
-			})
+			s.RequestAssert(reqAssert.SetChecks(
+				scaffold.WithExpectedStatus(200),
+				scaffold.WithExpectedBodyNotContains(
+					"httpbin.update.example.com",
+					"httpbin.example.com",
+				),
+			))
 		})
 	})
 })

@@ -922,7 +922,7 @@ spec:
 				},
 				Headers: map[string]string{
 					"X-Route-Name": "httpbin",
-					"X-HRP-Name":   "new-hrp-name",
+					"X-HRP-Name":   "http-route-policy-0",
 				},
 				Check: scaffold.WithExpectedStatus(http.StatusNotFound),
 			})
