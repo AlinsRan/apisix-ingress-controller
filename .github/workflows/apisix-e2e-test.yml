@@ -35,7 +35,7 @@ concurrency:
 jobs:
   prepare:
     name: Prepare
-    runs-on: ubuntu-2004
+    runs-on: ubuntu-2204
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,7 +62,7 @@ jobs:
         - apisix.apache.org
         - networking.k8s.io
       fail-fast: false
-    runs-on: ubuntu-2004
+    runs-on: ubuntu-2204
     steps:
       - name: Checkout
         uses: actions/checkout@v4
