@@ -177,9 +177,6 @@ spec:
 			err := s.CreateResourceFromString(fmt.Sprintf(gatewayProxyWithDisabledPlugin, s.Namespace(), s.Deployer.GetAdminEndpoint(), s.AdminKey()))
 			Expect(err).NotTo(HaveOccurred(), "updating GatewayProxy with disabled plugin")
 
-			By("Create HTTPRoute for Gateway with GatewayProxy")
-			s.ResourceApplied("HTTPRoute", "test-route", fmt.Sprintf(httpRouteForTest, s.Namespace()), 1)
-
 			By("Check if the plugin is not applied")
 			s.RequestAssert(&scaffold.RequestAssert{
 				Method: "GET",

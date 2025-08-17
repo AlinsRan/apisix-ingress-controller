@@ -122,18 +122,18 @@ spec:
 		gatewayName := s.Namespace()
 		By("create GatewayProxy")
 		gatewayProxyName := s.Namespace()
-		err = s.CreateResourceFromStringWithNamespace(fmt.Sprintf(defaultGatewayProxy, gatewayProxyName, s.Deployer.GetAdminEndpoint(), s.AdminKey()), s.Namespace())
+		err = s.CreateResourceFromString(fmt.Sprintf(defaultGatewayProxy, gatewayProxyName, s.Deployer.GetAdminEndpoint(), s.AdminKey()))
 		Expect(err).NotTo(HaveOccurred(), "creating GatewayProxy")
 		time.Sleep(time.Second)
 
 		By("create GatewayClass")
-		gatewayClassName := fmt.Sprintf("apisix-%d", time.Now().Unix())
-		err = s.CreateResourceFromString(fmt.Sprintf(defaultGatewayClass, gatewayClassName, s.GetControllerName()))
+		gatewayClassName := s.Namespace()
+		err = s.CreateResourceFromStringWithNamespace(fmt.Sprintf(defaultGatewayClass, gatewayClassName, s.GetControllerName()), "")
 		Expect(err).NotTo(HaveOccurred(), "creating GatewayClass")
 		time.Sleep(time.Second)
 
 		By("create Gateway")
-		err = s.CreateResourceFromStringWithNamespace(fmt.Sprintf(defaultGateway, gatewayName, gatewayClassName, gatewayProxyName), s.Namespace())
+		err = s.CreateResourceFromString(fmt.Sprintf(defaultGateway, gatewayName, gatewayClassName, gatewayProxyName))
 		Expect(err).NotTo(HaveOccurred(), "creating Gateway")
 		time.Sleep(time.Second)
 
