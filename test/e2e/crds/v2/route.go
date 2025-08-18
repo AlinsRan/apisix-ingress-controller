@@ -1249,7 +1249,7 @@ spec:
 		})
 
 		Context("complex scenarios", func() {
-			It("multiple external services in one upstream", func() {
+			FIt("multiple external services in one upstream", func() {
 				upstreamName := s.Namespace()
 				routeName := s.Namespace()
 				By("create ApisixUpstream with multiple external nodes")
@@ -1293,6 +1293,7 @@ spec:
 					if hasEtag && hasNoEtag {
 						break
 					}
+					s.GinkgoT.Logf("received headers: %v", headers)
 				}
 				assert.True(GinkgoT(), hasEtag && hasNoEtag, "both httpbin and postman should be accessed at least once")
 			})
