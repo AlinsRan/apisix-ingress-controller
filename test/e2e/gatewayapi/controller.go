@@ -29,6 +29,7 @@ import (
 )
 
 var _ = Describe("Check if controller cache gets synced with correct resources", Label("networking.k8s.io", "basic"), func() {
+	s := scaffold.NewDefaultScaffold()
 
 	var gatewayProxyYaml = `
 apiVersion: apisix.apache.org/v1alpha1
@@ -94,7 +95,7 @@ spec:
 			)
 		time.Sleep(3 * time.Second)
 	}
-	var beforeEach = func(s *scaffold.Scaffold) {
+	var beforeEach = func() {
 		By(fmt.Sprintf("create GatewayClass for controller %s", s.GetControllerName()))
 
 		By("create GatewayProxy")
@@ -129,9 +130,6 @@ spec:
 	}
 
 	Context("Create resource with first controller", func() {
-		s1 := scaffold.NewScaffold(&scaffold.Options{
-			ControllerName: fmt.Sprintf("apisix.apache.org/apisix-ingress-controller-%d", time.Now().Unix()),
-		})
 		var route1 = `
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -162,21 +160,18 @@ spec:
       weight: 50
  `
 		BeforeEach(func() {
-			beforeEach(s1)
+			beforeEach()
 		})
 		It("Apply resource ", func() {
-			ResourceApplied(s1, "HTTPRoute", "httpbin", s1.Namespace(), fmt.Sprintf(route1, s1.Namespace()), 1)
+			ResourceApplied(s, "HTTPRoute", "httpbin", s.Namespace(), fmt.Sprintf(route1, s.Namespace()), 1)
 			time.Sleep(5 * time.Second)
-			routes, err := s1.DefaultDataplaneResource().Route().List(s1.Context)
+			routes, err := s.DefaultDataplaneResource().Route().List(s.Context)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(routes).To(HaveLen(1))
-			assert.Equal(GinkgoT(), routes[0].Labels["k8s/controller-name"], s1.GetControllerName())
+			assert.Equal(GinkgoT(), routes[0].Labels["k8s/controller-name"], s.GetControllerName())
 		})
 	})
 	Context("Create resource with second controller", func() {
-		s2 := scaffold.NewScaffold(&scaffold.Options{
-			ControllerName: fmt.Sprintf("apisix.apache.org/apisix-ingress-controller-%d", time.Now().Unix()),
-		})
 		var route2 = `
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -208,15 +203,15 @@ spec:
       weight: 50
 `
 		BeforeEach(func() {
-			beforeEach(s2)
+			beforeEach()
 		})
 		It("Apply resource ", func() {
-			ResourceApplied(s2, "HTTPRoute", "httpbin2", s2.Namespace(), fmt.Sprintf(route2, s2.Namespace(), s2.Namespace()), 1)
+			ResourceApplied(s, "HTTPRoute", "httpbin2", s.Namespace(), fmt.Sprintf(route2, s.Namespace(), s.Namespace()), 1)
 			time.Sleep(5 * time.Second)
-			routes, err := s2.DefaultDataplaneResource().Route().List(s2.Context)
+			routes, err := s.DefaultDataplaneResource().Route().List(s.Context)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(routes).To(HaveLen(1))
-			assert.Equal(GinkgoT(), routes[0].Labels["k8s/controller-name"], s2.GetControllerName())
+			assert.Equal(GinkgoT(), routes[0].Labels["k8s/controller-name"], s.GetControllerName())
 		})
 	})
 })
