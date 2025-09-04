@@ -560,8 +560,8 @@ spec:
 			})
 
 			By("change IngressClassName to invalid")
-			applier.MustApplyAPIv2(types.NamespacedName{Namespace: s.Namespace(), Name: "default"},
-				&apisixRoute, fmt.Sprintf(apisixRouteSpec, "invalid"))
+			err := s.CreateResourceFromString(fmt.Sprintf(apisixRouteSpec, "invalid"))
+			Expect(err).NotTo(HaveOccurred(), "creating ApisixRoute with IngressClass")
 
 			s.RequestAssert(&scaffold.RequestAssert{
 				Method: "GET",
