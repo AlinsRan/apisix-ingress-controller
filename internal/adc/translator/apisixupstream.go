@@ -31,29 +31,57 @@ import (
 	"github.com/apache/apisix-ingress-controller/internal/utils"
 )
 
-func (t *Translator) translateApisixUpstream(tctx *provider.TranslateContext, au *apiv2.ApisixUpstream) (ups *adc.Upstream, err error) {
-	ups = adc.NewDefaultUpstream()
-	for _, f := range []func(*apiv2.ApisixUpstream, *adc.Upstream) error{
-		patchApisixUpstreamBasics,
+func (t *Translator) translateApisixUpstream(tctx *provider.TranslateContext, au *apiv2.ApisixUpstream, port int32) (*adc.Upstream, error) {
+	ups := adc.NewDefaultUpstream()
+	ups.Name = composeExternalUpstreamName(au)
+	for k, v := range au.Labels {
+		ups.Labels[k] = v
+	}
+
+	for _, f := range []func(*provider.TranslateContext, *apiv2.ApisixUpstream, *adc.Upstream) error{
+		translateApisixUpstreamConfig,
+		translateApisixUpstreamExternalNodes,
+	} {
+		if err := f(tctx, au, ups); err != nil {
+			return nil, err
+		}
+	}
+
+	// If portLevelSettings is configured, we need to validate the ports in
+	if len(au.Spec.PortLevelSettings) > 0 && port != 0 {
+		for _, pls := range au.Spec.PortLevelSettings {
+			if pls.Port != port {
+				continue
+			}
+			if err := translateApisixUpstreamConfig(tctx, au, ups); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return ups, nil
+}
+
+func translateApisixUpstreamConfig(tctx *provider.TranslateContext, au *apiv2.ApisixUpstream, ups *adc.Upstream) (err error) {
+	config := &au.Spec.ApisixUpstreamConfig
+	for _, f := range []func(*apiv2.ApisixUpstreamConfig, *adc.Upstream) error{
 		translateApisixUpstreamScheme,
 		translateApisixUpstreamLoadBalancer,
 		translateApisixUpstreamRetriesAndTimeout,
 		translateApisixUpstreamPassHost,
 		translateUpstreamHealthCheck,
 	} {
-		if err = f(au, ups); err != nil {
+		if err = f(config, ups); err != nil {
 			return
 		}
 	}
-	for _, f := range []func(*provider.TranslateContext, *apiv2.ApisixUpstream, *adc.Upstream) error{
+	for _, f := range []func(*provider.TranslateContext, *apiv2.ApisixUpstreamConfig, *adc.Upstream) error{
 		translateApisixUpstreamClientTLS,
-		translateApisixUpstreamExternalNodes,
 	} {
-		if err = f(tctx, au, ups); err != nil {
+		if err = f(tctx, config, ups); err != nil {
 			return
 		}
 	}
-
 	return
 }
 
@@ -65,13 +93,13 @@ func patchApisixUpstreamBasics(au *apiv2.ApisixUpstream, ups *adc.Upstream) erro
 	return nil
 }
 
-func translateApisixUpstreamScheme(au *apiv2.ApisixUpstream, ups *adc.Upstream) error {
-	ups.Scheme = cmp.Or(au.Spec.Scheme, apiv2.SchemeHTTP)
+func translateApisixUpstreamScheme(config *apiv2.ApisixUpstreamConfig, ups *adc.Upstream) error {
+	ups.Scheme = cmp.Or(config.Scheme, apiv2.SchemeHTTP)
 	return nil
 }
 
-func translateApisixUpstreamLoadBalancer(au *apiv2.ApisixUpstream, ups *adc.Upstream) error {
-	lb := au.Spec.LoadBalancer
+func translateApisixUpstreamLoadBalancer(config *apiv2.ApisixUpstreamConfig, ups *adc.Upstream) error {
+	lb := config.LoadBalancer
 	if lb == nil || lb.Type == "" {
 		ups.Type = apiv2.LbRoundRobin
 		return nil
@@ -102,9 +130,9 @@ func translateApisixUpstreamLoadBalancer(au *apiv2.ApisixUpstream, ups *adc.Upst
 	return nil
 }
 
-func translateApisixUpstreamRetriesAndTimeout(au *apiv2.ApisixUpstream, ups *adc.Upstream) error {
-	retries := au.Spec.Retries
-	timeout := au.Spec.Timeout
+func translateApisixUpstreamRetriesAndTimeout(config *apiv2.ApisixUpstreamConfig, ups *adc.Upstream) error {
+	retries := config.Retries
+	timeout := config.Timeout
 
 	if retries != nil && *retries < 0 {
 		return errors.New("invalid value retries")
@@ -139,15 +167,15 @@ func translateApisixUpstreamRetriesAndTimeout(au *apiv2.ApisixUpstream, ups *adc
 	return nil
 }
 
-func translateApisixUpstreamClientTLS(tctx *provider.TranslateContext, au *apiv2.ApisixUpstream, ups *adc.Upstream) error {
-	if au.Spec.TLSSecret == nil {
+func translateApisixUpstreamClientTLS(tctx *provider.TranslateContext, config *apiv2.ApisixUpstreamConfig, ups *adc.Upstream) error {
+	if config.TLSSecret == nil {
 		return nil
 	}
 
 	var (
 		secretNN = types.NamespacedName{
-			Namespace: au.Spec.TLSSecret.Namespace,
-			Name:      au.Spec.TLSSecret.Name,
+			Namespace: config.TLSSecret.Namespace,
+			Name:      config.TLSSecret.Name,
 		}
 	)
 	secret, ok := tctx.Secrets[secretNN]
@@ -168,9 +196,9 @@ func translateApisixUpstreamClientTLS(tctx *provider.TranslateContext, au *apiv2
 	return nil
 }
 
-func translateApisixUpstreamPassHost(au *apiv2.ApisixUpstream, ups *adc.Upstream) error {
-	ups.PassHost = au.Spec.PassHost
-	ups.UpstreamHost = au.Spec.UpstreamHost
+func translateApisixUpstreamPassHost(config *apiv2.ApisixUpstreamConfig, ups *adc.Upstream) error {
+	ups.PassHost = config.PassHost
+	ups.UpstreamHost = config.UpstreamHost
 
 	return nil
 }
@@ -254,11 +282,8 @@ func translateApisixUpstreamExternalNodesService(tctx *provider.TranslateContext
 	return nil
 }
 
-func translateUpstreamHealthCheck(au *apiv2.ApisixUpstream, ups *adc.Upstream) error {
-	if au == nil {
-		return nil
-	}
-	healcheck := au.Spec.HealthCheck
+func translateUpstreamHealthCheck(config *apiv2.ApisixUpstreamConfig, ups *adc.Upstream) error {
+	healcheck := config.HealthCheck
 	if healcheck == nil || (healcheck.Passive == nil && healcheck.Active == nil) {
 		return nil
 	}
