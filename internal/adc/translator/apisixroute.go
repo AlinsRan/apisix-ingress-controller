@@ -211,7 +211,9 @@ func (t *Translator) buildUpstream(tctx *provider.TranslateContext, service *adc
 	)
 
 	for _, backend := range rule.Backends {
-		upstream, err := t.translateApisixRouteHTTPBackend(tctx, utils.NamespacedName(ar), backend)
+		// try to get the apisixupstream with the same name as the backend service to be upstream config.
+		// err is ignored because it does not care about the externalNodes of the apisixupstream.
+		upstream, err := t.translateApisixRouteHTTPBackend(tctx, ar, backend)
 		if err != nil {
 			t.Log.Error(err, "failed to translate ApisixRoute backend", "backend", backend)
 			continue
@@ -249,7 +251,7 @@ func (t *Translator) buildUpstream(tctx *provider.TranslateContext, service *adc
 	}
 
 	// no valid upstream
-	if len(upstreams) == 0 || len(upstreams[0].Nodes) == 0 {
+	if len(upstreams) == 0 {
 		return
 	}
 
@@ -330,11 +332,12 @@ func getPortFromService(svc *v1.Service, backendSvcPort intstr.IntOrString) (int
 	return port, nil
 }
 
-func (t *Translator) translateApisixRouteHTTPBackend(tctx *provider.TranslateContext, auNN types.NamespacedName, backend apiv2.ApisixRouteHTTPBackend) (*adc.Upstream, error) {
+func (t *Translator) translateApisixRouteHTTPBackend(tctx *provider.TranslateContext, ar *apiv2.ApisixRoute, backend apiv2.ApisixRouteHTTPBackend) (*adc.Upstream, error) {
+	auNN := types.NamespacedName{
+		Namespace: ar.Namespace,
+		Name:      backend.ServiceName,
+	}
 	upstream := adc.NewDefaultUpstream()
-	// try to get the apisixupstream with the same name as the backend service to be upstream config.
-	// err is ignored because it does not care about the externalNodes of the apisixupstream.
-
 	if au, ok := tctx.Upstreams[auNN]; ok {
 		svc := tctx.Services[auNN]
 		if svc == nil {
@@ -344,7 +347,10 @@ func (t *Translator) translateApisixRouteHTTPBackend(tctx *provider.TranslateCon
 		if err != nil {
 			return nil, err
 		}
-		upstream, _ = t.translateApisixUpstream(tctx, au, port)
+		upstream, err = t.translateApisixUpstream(tctx, au, port)
+		if err != nil {
+			return nil, err
+		}
 	}
 	var err error
 	if backend.ResolveGranularity == apiv2.ResolveGranularityService {

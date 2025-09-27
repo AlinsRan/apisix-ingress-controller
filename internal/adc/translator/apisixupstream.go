@@ -20,8 +20,11 @@ package translator
 import (
 	"cmp"
 	"fmt"
+	"maps"
 
+	"github.com/api7/gopkg/pkg/log"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -32,19 +35,17 @@ import (
 )
 
 func (t *Translator) translateApisixUpstream(tctx *provider.TranslateContext, au *apiv2.ApisixUpstream, port int32) (*adc.Upstream, error) {
+	log.Debugw("translating ApisixUpstream", zap.Any("apisixupstream", au), zap.Int32("port", port))
+
 	ups := adc.NewDefaultUpstream()
 	ups.Name = composeExternalUpstreamName(au)
-	for k, v := range au.Labels {
-		ups.Labels[k] = v
-	}
+	maps.Copy(ups.Labels, au.Labels)
 
-	for _, f := range []func(*provider.TranslateContext, *apiv2.ApisixUpstream, *adc.Upstream) error{
-		translateApisixUpstreamConfig,
-		translateApisixUpstreamExternalNodes,
-	} {
-		if err := f(tctx, au, ups); err != nil {
-			return nil, err
-		}
+	if err := translateApisixUpstreamConfig(tctx, &au.Spec.ApisixUpstreamConfig, ups); err != nil {
+		return nil, err
+	}
+	if err := translateApisixUpstreamExternalNodes(tctx, au, ups); err != nil {
+		return nil, err
 	}
 
 	// If portLevelSettings is configured, we need to validate the ports in
@@ -53,23 +54,25 @@ func (t *Translator) translateApisixUpstream(tctx *provider.TranslateContext, au
 			if pls.Port != port {
 				continue
 			}
-			if err := translateApisixUpstreamConfig(tctx, au, ups); err != nil {
+			if err := translateApisixUpstreamConfig(tctx, &pls.ApisixUpstreamConfig, ups); err != nil {
 				return nil, err
 			}
 		}
 	}
 
+	log.Debugw("translated ApisixUpstream", zap.Any("upstream", ups))
+
 	return ups, nil
 }
 
-func translateApisixUpstreamConfig(tctx *provider.TranslateContext, au *apiv2.ApisixUpstream, ups *adc.Upstream) (err error) {
-	config := &au.Spec.ApisixUpstreamConfig
+func translateApisixUpstreamConfig(tctx *provider.TranslateContext, config *apiv2.ApisixUpstreamConfig, ups *adc.Upstream) (err error) {
 	for _, f := range []func(*apiv2.ApisixUpstreamConfig, *adc.Upstream) error{
 		translateApisixUpstreamScheme,
 		translateApisixUpstreamLoadBalancer,
 		translateApisixUpstreamRetriesAndTimeout,
 		translateApisixUpstreamPassHost,
 		translateUpstreamHealthCheck,
+		translateUpstreamDiscovery,
 	} {
 		if err = f(config, ups); err != nil {
 			return
@@ -82,15 +85,8 @@ func translateApisixUpstreamConfig(tctx *provider.TranslateContext, au *apiv2.Ap
 			return
 		}
 	}
-	return
-}
 
-func patchApisixUpstreamBasics(au *apiv2.ApisixUpstream, ups *adc.Upstream) error {
-	ups.Name = composeExternalUpstreamName(au)
-	for k, v := range au.Labels {
-		ups.Labels[k] = v
-	}
-	return nil
+	return
 }
 
 func translateApisixUpstreamScheme(config *apiv2.ApisixUpstreamConfig, ups *adc.Upstream) error {
@@ -364,4 +360,15 @@ func translateUpstreamPassiveHealthCheck(config *apiv2.PassiveHealthCheck) *adc.
 		passive.Unhealthy.HTTPStatuses = config.Unhealthy.HTTPCodes
 	}
 	return &passive
+}
+
+func translateUpstreamDiscovery(config *apiv2.ApisixUpstreamConfig, ups *adc.Upstream) error {
+	discovery := config.Discovery
+	if discovery == nil {
+		return nil
+	}
+	ups.ServiceName = discovery.ServiceName
+	ups.DiscoveryType = discovery.Type
+	ups.DiscoveryArgs = discovery.Args
+	return nil
 }
