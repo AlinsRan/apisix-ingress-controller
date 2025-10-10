@@ -37,6 +37,7 @@ const (
 	KindTCPRoute             = "TCPRoute"
 	KindUDPRoute             = "UDPRoute"
 	KindGRPCRoute            = "GRPCRoute"
+	KindTLSRoute             = "TLSRoute"
 	KindGatewayClass         = "GatewayClass"
 	KindIngress              = "Ingress"
 	KindIngressClass         = "IngressClass"
