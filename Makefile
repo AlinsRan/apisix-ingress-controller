@@ -153,6 +153,10 @@ conformance-test:
 		--conformance-profiles=$(CONFORMANCE_PROFILES) \
 		--report-output=$(CONFORMANCE_TEST_REPORT_OUTPUT)
 
+.PHONY: benchmark-test
+benchmark-test:
+	go test -v ./test/benchmark -test.timeout=$(TEST_TIMEOUT) -v -ginkgo.v
+
 .PHONY: lint
 lint: sort-import golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run
