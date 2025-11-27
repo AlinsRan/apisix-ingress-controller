@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-name: APISIX E2E Test
+name: Benchmark Test
 
 on:
   push:
@@ -23,6 +23,11 @@ on:
       - master
       - benchmark-test
   workflow_dispatch:
+    inputs:
+      benchmark_routes:
+        description: "Number of routes for benchmark test"
+        required: false
+        default: "2000"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -30,6 +35,7 @@ concurrency:
 
 env:
   ADC_VERSION: dev
+  BENCHMARK_ROUTES: ${{ github.event.inputs.benchmark_routes }}
 
 jobs:
   e2e-test:
@@ -81,7 +87,7 @@ jobs:
         run: |
           make install
 
-      - name: Run E2E test suite
+      - name: Run Benchmark Test
         shell: bash
         env:
           PROVIDER_TYPE: ${{ matrix.provider_type }}

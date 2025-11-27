@@ -32,6 +32,20 @@ import (
 	"github.com/apache/apisix-ingress-controller/test/e2e/scaffold"
 )
 
+var report = &BenchmarkReport{}
+var totalRoutes = 2000
+
+var _ = BeforeSuite(func() {
+	num := os.Getenv("BENCHMARK_ROUTES")
+	if num != "" {
+		_, err := fmt.Sscanf(num, "%d", &totalRoutes)
+		Expect(err).NotTo(HaveOccurred(), "parsing BENCHMARK_ROUTES")
+	}
+})
+var _ = AfterSuite(func() {
+	report.PrintTable()
+})
+
 const gatewayProxyYaml = `
 apiVersion: apisix.apache.org/v1alpha1
 kind: GatewayProxy
@@ -50,35 +64,6 @@ spec:
           value: "%s"
 `
 
-const ingressClassYaml = `
-apiVersion: networking.k8s.io/v1
-kind: IngressClass
-metadata:
-  name: apisix
-spec:
-  controller: "%s"
-  parameters:
-    apiGroup: "apisix.apache.org"
-    kind: "GatewayProxy"
-    name: "apisix-proxy-config"
-    namespace: %s
-    scope: "Namespace"
-`
-
-var report = &BenchmarkReport{}
-var totalRoutes = 2000
-
-var _ = BeforeSuite(func() {
-	num := os.Getenv("BENCHMARK_ROUTES")
-	if num != "" {
-		_, err := fmt.Sscanf(num, "%d", &totalRoutes)
-		Expect(err).NotTo(HaveOccurred(), "parsing BENCHMARK_ROUTES")
-	}
-})
-var _ = AfterSuite(func() {
-	report.PrintTable()
-})
-
 var _ = Describe("Benchmark Test", func() {
 	var (
 		s                = scaffold.NewDefaultScaffold()
@@ -93,6 +78,21 @@ var _ = Describe("Benchmark Test", func() {
 	})
 
 	Context("Benchmark ApisixRoute", func() {
+		const ingressClassYaml = `
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: apisix
+spec:
+  controller: "%s"
+  parameters:
+    apiGroup: "apisix.apache.org"
+    kind: "GatewayProxy"
+    name: "apisix-proxy-config"
+    namespace: %s
+    scope: "Namespace"
+`
+
 		const apisixRouteSpec = `
 apiVersion: apisix.apache.org/v2
 kind: ApisixRoute
