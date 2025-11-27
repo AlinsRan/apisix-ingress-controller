@@ -17,17 +17,15 @@
 package benchmark
 
 import (
-	"context"
-	"encoding/json"
+	"bytes"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/api7/gopkg/pkg/log"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/util/wait"
 
 	adctypes "github.com/apache/apisix-ingress-controller/api/adc"
 	"github.com/apache/apisix-ingress-controller/test/e2e/framework"
@@ -68,87 +66,28 @@ spec:
 `
 
 var report = &BenchmarkReport{}
+var totalRoutes = 2000
+
+var _ = BeforeSuite(func() {
+	num := os.Getenv("BENCHMARK_ROUTES")
+	if num != "" {
+		_, err := fmt.Sscanf(num, "%d", &totalRoutes)
+		Expect(err).NotTo(HaveOccurred(), "parsing BENCHMARK_ROUTES")
+	}
+})
+var _ = AfterSuite(func() {
+	report.PrintTable()
+})
 
 var _ = Describe("Benchmark Test", func() {
 	var (
 		s                = scaffold.NewDefaultScaffold()
 		controlAPIClient scaffold.ControlAPIClient
-		err              error
-		total            = 2000
 	)
 
-	ensureNumService := func(number int) error {
-		times := 0
-		return wait.PollUntilContextTimeout(context.Background(), 100*time.Millisecond, 10*time.Minute, true, func(ctx context.Context) (done bool, err error) {
-			times++
-			results, _, err := controlAPIClient.ListServices()
-			if err != nil {
-				log.Errorw("failed to ListServices", zap.Error(err))
-				return false, nil
-			}
-			if len(results) != number {
-				log.Debugw("number of effective services", zap.Int("number", len(results)), zap.Int("times", times))
-				return false, nil
-			}
-			return len(results) == number, nil
-		})
-	}
-
-	expectUpstream := func(name string, matcher func(upstream adctypes.Upstream) bool) error {
-		times := 0
-		return wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 10*time.Minute, true, func(ctx context.Context) (done bool, err error) {
-			times++
-			//upstreams, err := s.Deployer.DefaultDataplaneResource().Upstream().List(context.Background())
-			upstreams, _, err := controlAPIClient.ListUpstreams()
-			if err != nil {
-				log.Errorw("failed to ListServices", zap.Error(err))
-				return false, nil
-			}
-			for _, upstream := range upstreams {
-				upsValue := upstream.(map[string]any)
-				data, err := json.Marshal(upsValue["value"])
-				if err != nil {
-					return false, fmt.Errorf("failed to marshal upstream: %v", err)
-				}
-
-				var ups adctypes.Upstream
-				if err := json.Unmarshal(data, &ups); err != nil {
-					return false, fmt.Errorf("failed to unmarshal upstream: %v", err)
-				}
-				if name != "" && ups.Name != name {
-					continue
-				}
-				if ok := matcher(ups); !ok {
-					return false, nil
-				}
-			}
-			return true, nil
-		})
-	}
-
-	ensureNumUpstreamNodes := func(name string, number int) error {
-		return expectUpstream(name, func(upstream adctypes.Upstream) bool {
-			if len(upstream.Nodes) != number {
-				log.Warnf("expect upstream: [%s] nodes num to be %d, but got %d", upstream.Name, number, len(upstream.Nodes))
-				return false
-			}
-			return true
-		})
-	}
-
 	BeforeEach(func() {
-		By("create GatewayProxy")
-		gatewayProxy := fmt.Sprintf(gatewayProxyYaml, framework.ProviderType, s.AdminKey())
-		err = s.CreateResourceFromStringWithNamespace(gatewayProxy, s.Namespace())
-		Expect(err).NotTo(HaveOccurred(), "creating GatewayProxy")
-		time.Sleep(5 * time.Second)
-
-		By("create IngressClass")
-		err = s.CreateResourceFromStringWithNamespace(fmt.Sprintf(ingressClassYaml, s.GetControllerName(), s.Namespace()), "")
-		Expect(err).NotTo(HaveOccurred(), "creating IngressClass")
-		time.Sleep(5 * time.Second)
-
 		By("port-forward to control api service")
+		var err error
 		controlAPIClient, err = s.ControlAPIClient()
 		Expect(err).NotTo(HaveOccurred(), "create control api client")
 	})
@@ -209,47 +148,58 @@ spec:
   scheme: https
 `
 
-		FIt("test 2000 ApisixRoute", func() {
-			_ = apisixUpstreamSpec
-			By(fmt.Sprintf("prepare %d ApisixRoutes", total))
-			err := s.CreateResourceFromString(createBatchApisixRoutes(apisixRouteSpec, total))
+		getRouteName := func(i int) string {
+			return fmt.Sprintf("test-route-%04d", i)
+		}
+
+		createBatchApisixRoutes := func(number int) string {
+			var buf bytes.Buffer
+			for i := 0; i < number; i++ {
+				name := getRouteName(i)
+				fmt.Fprintf(&buf, apisixRouteSpec, name, name)
+				buf.WriteString("\n---\n")
+			}
+			return buf.String()
+		}
+
+		benchmark := func(scenario string) {
+			s.Deployer.ScaleIngress(0)
+			By(fmt.Sprintf("prepare %d ApisixRoutes", totalRoutes))
+			err := s.CreateResourceFromString(createBatchApisixRoutes(totalRoutes))
 			Expect(err).NotTo(HaveOccurred(), "creating ApisixRoutes")
+			s.Deployer.ScaleIngress(1)
 
 			now := time.Now()
-			By(fmt.Sprintf("start cale time for applying %d ApisixRoutes to take effect", total))
-			err = ensureNumService(total)
+			By(fmt.Sprintf("start cale time for applying %d ApisixRoutes to take effect", totalRoutes))
+			err = s.EnsureNumService(controlAPIClient, func(actual int) bool { return actual == totalRoutes })
 			Expect(err).ShouldNot(HaveOccurred())
 			costTime := time.Since(now)
-			report.Add("ApisixRoute Benchmark", fmt.Sprintf("Apply %d ApisixRoutes", total), costTime)
+			report.Add(scenario, fmt.Sprintf("Apply %d ApisixRoutes", totalRoutes), costTime)
 
 			By("Test the time required for an ApisixRoute update to take effect")
-			name := getRouteName(10)
+			name := getRouteName(int(time.Now().Unix()))
 			err = s.CreateResourceFromString(fmt.Sprintf(apisixRouteSpecHeaders, name, name))
 			Expect(err).NotTo(HaveOccurred())
 			now = time.Now()
 			Eventually(func() int {
 				return s.NewAPISIXClient().GET("/headers").WithHeader("X-Route-Name", name).Expect().Raw().StatusCode
-			}).WithTimeout(time.Minute).ProbeEvery(100 * time.Millisecond).Should(Equal(http.StatusOK))
-			report.AddResult(TestResult{
-				Scenario: "ApisixRoute Benchmark",
-				CaseName: fmt.Sprintf("Update a single ApisixRoute base on %d ApisixRoutes", total),
-				CostTime: time.Since(now),
-			})
+			}).WithTimeout(5 * time.Minute).ProbeEvery(100 * time.Millisecond).Should(Equal(http.StatusOK))
+			report.Add(scenario, fmt.Sprintf("Update a single ApisixRoute base on %d ApisixRoutes", totalRoutes), time.Since(now))
 
 			By("Test the time required for a service endpoint change to take effect")
 			err = s.ScaleHTTPBIN(2)
 			Expect(err).NotTo(HaveOccurred(), "scale httpbin deployment")
 			now = time.Now()
-			err = ensureNumUpstreamNodes("", 2)
+			err = s.EnsureNumUpstreamNodes(controlAPIClient, "", 2)
 			Expect(err).ShouldNot(HaveOccurred())
 			costTime = time.Since(now)
-			report.Add("ApisixRoute Benchmark", fmt.Sprintf("Service endpoint change base on %d ApisixRoutes", total), costTime)
+			report.Add(scenario, fmt.Sprintf("Service endpoint change base on %d ApisixRoutes", totalRoutes), costTime)
 
 			By("Test the time required for an ApisixUpstream update to take effect")
 			err = s.CreateResourceFromString(apisixUpstreamSpec)
 			Expect(err).NotTo(HaveOccurred(), "creating ApisixUpstream")
 			now = time.Now()
-			expectUpstream("", func(upstream adctypes.Upstream) bool {
+			s.ExpectUpstream(controlAPIClient, "", func(upstream adctypes.Upstream) bool {
 				if upstream.Scheme != "https" {
 					log.Warnf("expect upstream: [%s] scheme to be https, but got [%s]", upstream.Name, upstream.Scheme)
 					return false
@@ -257,13 +207,144 @@ spec:
 				return true
 			})
 			costTime = time.Since(now)
-			report.Add("ApisixRoute Benchmark", fmt.Sprintf("Update ApisixUpstream base on %d ApisixRoutes", total), costTime)
+			report.Add(scenario, fmt.Sprintf("Update ApisixUpstream base on %d ApisixRoutes", totalRoutes), costTime)
+		}
+
+		BeforeEach(func() {
+			By("create GatewayProxy")
+			gatewayProxy := fmt.Sprintf(gatewayProxyYaml, framework.ProviderType, s.AdminKey())
+			err := s.CreateResourceFromStringWithNamespace(gatewayProxy, s.Namespace())
+			Expect(err).NotTo(HaveOccurred(), "creating GatewayProxy")
+			time.Sleep(5 * time.Second)
+
+			By("create IngressClass")
+			err = s.CreateResourceFromStringWithNamespace(fmt.Sprintf(ingressClassYaml, s.GetControllerName(), s.Namespace()), "")
+			Expect(err).NotTo(HaveOccurred(), "creating IngressClass")
+			time.Sleep(5 * time.Second)
+		})
+		It("benchmark ApisixRoute", func() {
+			benchmark("ApisixRoute Benchmark")
+		})
+		It("10 apisix-standalone pod scale benchmark", func() {
+			if framework.ProviderType != framework.ProviderTypeAPISIXStandalone {
+				Skip("only apisix-standalone support scale benchmark")
+			}
+			s.Deployer.ScaleDataplane(10)
+			benchmark("ApisixRoute Benchmark with 10 apisix-standalone pods")
+		})
+	})
+
+	Context("Benchmark HTTPRoute", func() {
+		const httpRouteSpec = `
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: %s
+spec:
+  parentRefs:
+  - name: %s
+  rules:
+  - matches: 
+    - path:
+        type: Exact
+        value: /get
+      headers:
+        - type: Exact
+          name: X-Route-Name
+          value: %s
+    # name: get
+    backendRefs:
+    - name: httpbin-service-e2e-test
+      port: 80
+`
+		const httpRouteSpecHeaders = `
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: %s
+spec:
+  parentRefs:
+  - name: %s
+  rules:
+  - matches: 
+    - path:
+        type: Exact
+        value: /headers
+      headers:
+        - type: Exact
+          name: X-Route-Name
+          value: %s
+    # name: get
+    backendRefs:
+    - name: httpbin-service-e2e-test
+      port: 80
+`
+
+		createBatchHTTPRoutes := func(number int, parentGateway string) string {
+			var buf bytes.Buffer
+			for i := 0; i < number; i++ {
+				name := getRouteName(i)
+				fmt.Fprintf(&buf, httpRouteSpec, name, parentGateway, name)
+				buf.WriteString("\n---\n")
+			}
+			return buf.String()
+		}
+
+		BeforeEach(func() {
+			By("create GatewayProxy")
+			gatewayProxy := fmt.Sprintf(gatewayProxyYaml, framework.ProviderType, s.AdminKey())
+			err := s.CreateResourceFromStringWithNamespace(gatewayProxy, s.Namespace())
+			Expect(err).NotTo(HaveOccurred(), "creating GatewayProxy")
+			time.Sleep(5 * time.Second)
+
+			By("create GatewayClass")
+			Expect(s.CreateResourceFromString(s.GetGatewayClassYaml())).NotTo(HaveOccurred(), "creating GatewayClass")
+
+			By("create Gateway")
+			Expect(s.CreateResourceFromString(s.GetGatewayYaml())).NotTo(HaveOccurred(), "creating Gateway")
+			time.Sleep(5 * time.Second)
+		})
+
+		It("benchmark HTTPRoute", func() {
+			s.Deployer.ScaleIngress(0)
+			By(fmt.Sprintf("prepare %d HTTPRoute", totalRoutes))
+			err := s.CreateResourceFromString(createBatchHTTPRoutes(totalRoutes, s.Namespace()))
+			Expect(err).NotTo(HaveOccurred(), "creating HTTPRoute")
+			s.Deployer.ScaleIngress(1)
+
+			now := time.Now()
+			By(fmt.Sprintf("start cale time for applying %d HTTPRoute to take effect", totalRoutes))
+			err = s.EnsureNumService(controlAPIClient, func(actual int) bool { return actual == totalRoutes })
+			Expect(err).ShouldNot(HaveOccurred())
+			costTime := time.Since(now)
+			report.Add("HTTPRoute Benchmark", fmt.Sprintf("Apply %d HTTPRoute", totalRoutes), costTime)
+
+			By("Test the time required for an HTTPRoute update to take effect")
+			name := getRouteName(int(time.Now().Unix()))
+			err = s.CreateResourceFromString(fmt.Sprintf(httpRouteSpecHeaders, name, s.Namespace(), name))
+			Expect(err).NotTo(HaveOccurred())
+			now = time.Now()
+			Eventually(func() int {
+				return s.NewAPISIXClient().GET("/headers").WithHeader("X-Route-Name", name).Expect().Raw().StatusCode
+			}).WithTimeout(5 * time.Minute).ProbeEvery(100 * time.Millisecond).Should(Equal(http.StatusOK))
+			report.AddResult(TestResult{
+				Scenario: "HTTPRoute Benchmark",
+				CaseName: fmt.Sprintf("Update a single HTTPRoute base on %d HTTPRoute", totalRoutes),
+				CostTime: time.Since(now),
+			})
+
+			By("Test the time required for a service endpoint change to take effect")
+			err = s.ScaleHTTPBIN(2)
+			Expect(err).NotTo(HaveOccurred(), "scale httpbin deployment")
+			now = time.Now()
+			err = s.EnsureNumUpstreamNodes(controlAPIClient, "", 2)
+			Expect(err).ShouldNot(HaveOccurred())
+			costTime = time.Since(now)
+			report.Add("HTTPRoute Benchmark", fmt.Sprintf("Service endpoint change base on %d HTTPRoute", totalRoutes), costTime)
 		})
 	})
 })
 
-var _ = AfterSuite(func() {
-	report.PrintTable()
-	// 或 Report.PrintJSON()
-	// 或 Report.PrintMarkdown()
-})
+func getRouteName(i int) string {
+	return fmt.Sprintf("test-route-%04d", i)
+}

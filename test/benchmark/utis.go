@@ -17,7 +17,6 @@
 package benchmark
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -65,31 +64,4 @@ func (r *BenchmarkReport) Add(scenario, caseName string, cost time.Duration) {
 		CaseName: caseName,
 		CostTime: cost,
 	})
-}
-
-func getRouteName(i int) string {
-	return fmt.Sprintf("test-route-%04d", i)
-}
-
-func PrintResults(results []TestResult) {
-	fmt.Printf("\n======================TEST RESULT ProviderSyncPeriod===============================\n")
-	fmt.Printf("%-70s", "Test Case")
-	fmt.Printf("%-70s\n", "Time Required")
-	fmt.Printf("%-70s\n", "--------------------------------------------------------------------------------------")
-	for _, result := range results {
-		fmt.Printf("%-70s", result.CaseName)
-		fmt.Printf("%-70s\n", result.CostTime)
-	}
-	fmt.Println("=======================================================================================")
-	fmt.Println()
-}
-
-func createBatchApisixRoutes(tmpl string, number int) string {
-	var buf bytes.Buffer
-	for i := 0; i < number; i++ {
-		name := getRouteName(i)
-		fmt.Fprintf(&buf, tmpl, name, name)
-		buf.WriteString("\n---\n")
-	}
-	return buf.String()
 }
