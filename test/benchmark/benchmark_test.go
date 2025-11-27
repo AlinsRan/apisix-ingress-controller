@@ -34,12 +34,18 @@ import (
 
 var report = &BenchmarkReport{}
 var totalRoutes = 2000
+var totalConsumers = 2000
 
 var _ = BeforeSuite(func() {
-	num := os.Getenv("BENCHMARK_ROUTES")
-	if num != "" {
-		_, err := fmt.Sscanf(num, "%d", &totalRoutes)
+	routes := os.Getenv("BENCHMARK_ROUTES")
+	if routes != "" {
+		_, err := fmt.Sscanf(routes, "%d", &totalRoutes)
 		Expect(err).NotTo(HaveOccurred(), "parsing BENCHMARK_ROUTES")
+	}
+	consumers := os.Getenv("BENCHMARK_CONSUMERS")
+	if consumers != "" {
+		_, err := fmt.Sscanf(consumers, "%d", &totalConsumers)
+		Expect(err).NotTo(HaveOccurred(), "parsing BENCHMARK_CONSUMERS")
 	}
 })
 var _ = AfterSuite(func() {
@@ -147,6 +153,37 @@ spec:
   ingressClassName: apisix
   scheme: https
 `
+		var apisixRouteSpecKeyAuth = `
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: key-auth
+spec:
+  ingressClassName: apisix
+  http:
+  - name: rule0
+    match:
+      paths:
+      - /get
+    backends:
+    - serviceName: httpbin-service-e2e-test
+      servicePort: 80
+    authentication:
+      enable: true
+      type: keyAuth
+`
+		var keyAuth = `
+apiVersion: apisix.apache.org/v2
+kind: ApisixConsumer
+metadata:
+  name: %s
+spec:
+  ingressClassName: apisix
+  authParameter:
+    keyAuth:
+      value:
+        key: %s
+`
 
 		getRouteName := func(i int) string {
 			return fmt.Sprintf("test-route-%04d", i)
@@ -157,6 +194,18 @@ spec:
 			for i := 0; i < number; i++ {
 				name := getRouteName(i)
 				fmt.Fprintf(&buf, apisixRouteSpec, name, name)
+				buf.WriteString("\n---\n")
+			}
+			return buf.String()
+		}
+		getConsumerName := func(i int) string {
+			return fmt.Sprintf("consumer-%04d", i)
+		}
+		createBatchConsumers := func(number int) string {
+			var buf bytes.Buffer
+			for i := 0; i < number; i++ {
+				name := getConsumerName(i)
+				fmt.Fprintf(&buf, keyAuth, name, name)
 				buf.WriteString("\n---\n")
 			}
 			return buf.String()
@@ -231,6 +280,37 @@ spec:
 			}
 			s.Deployer.ScaleDataplane(10)
 			benchmark("ApisixRoute Benchmark with 10 apisix-standalone pods")
+		})
+		It("ApisixRoute With Consumers benchmark", func() {
+			s.Deployer.ScaleIngress(0)
+			By(fmt.Sprintf("prepare %d ApisixConsumers", totalRoutes))
+			err := s.CreateResourceFromString(createBatchConsumers(totalRoutes))
+			Expect(err).NotTo(HaveOccurred(), "creating ApisixConsumers")
+			err = s.CreateResourceFromString(apisixRouteSpecKeyAuth)
+			Expect(err).NotTo(HaveOccurred(), "creating ApisixRoute with KeyAuth")
+			s.Deployer.ScaleIngress(1)
+
+			now := time.Now()
+			Eventually(func() int {
+				sunccess := 0
+				for i := 0; i < totalConsumers; i++ {
+					consumerName := getConsumerName(i)
+					if s.NewAPISIXClient().GET("/get").
+						WithHeader("apikey", consumerName).
+						Expect().Raw().StatusCode != http.StatusOK {
+						return sunccess
+					}
+					sunccess++
+				}
+				return sunccess
+			}).WithTimeout(10 * time.Minute).ProbeEvery(500 * time.Millisecond).Should(Equal(totalConsumers))
+			costTime := time.Since(now)
+			report.AddResult(TestResult{
+				Scenario:         "ApisixRoute With Consumers Benchmark",
+				CaseName:         fmt.Sprintf("Apply %d ApisixConsumers and ApisixRoute with KeyAuth", totalConsumers),
+				CostTime:         costTime,
+				IsRequestGateway: true,
+			})
 		})
 	})
 

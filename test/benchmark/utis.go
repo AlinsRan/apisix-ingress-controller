@@ -26,9 +26,10 @@ import (
 )
 
 type TestResult struct {
-	Scenario string        `json:"scenario"`
-	CaseName string        `json:"case_name"`
-	CostTime time.Duration `json:"cost_time"`
+	Scenario         string        `json:"scenario"`
+	CaseName         string        `json:"case_name"`
+	CostTime         time.Duration `json:"cost_time"`
+	IsRequestGateway bool          `json:"is_request_gateway,omitempty"`
 }
 
 type BenchmarkReport struct {
@@ -37,13 +38,14 @@ type BenchmarkReport struct {
 
 func (r *BenchmarkReport) PrintTable() {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.Header([]string{"Scenario", "Case", "Cost"})
+	table.Header([]string{"Scenario", "Case", "Cost", "IsRequestGateway"})
 
 	for _, res := range r.Results {
-		table.Append([]string{
+		table.Append([]any{
 			res.Scenario,
 			res.CaseName,
 			res.CostTime.String(),
+			res.IsRequestGateway,
 		})
 	}
 	table.Render()

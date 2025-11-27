@@ -22,10 +22,16 @@ on:
     branches:
       - master
       - benchmark-test
+    tags:
+      - '*'
   workflow_dispatch:
     inputs:
-      benchmark_routes:
+      routes:
         description: "Number of routes for benchmark test"
+        required: false
+        default: "2000"
+      consumers:
+        description: "Number of consumers for benchmark test"
         required: false
         default: "2000"
 
@@ -35,7 +41,8 @@ concurrency:
 
 env:
   ADC_VERSION: dev
-  BENCHMARK_ROUTES: ${{ github.event.inputs.benchmark_routes }}
+  BENCHMARK_ROUTES: ${{ github.event.inputs.routes }}
+  BENCHMARK_CONSUMERS: ${{ github.event.inputs.consumers }}
 
 jobs:
   e2e-test:
