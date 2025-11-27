@@ -569,10 +569,22 @@ func (s *Scaffold) ControlAPIClient() (ControlAPIClient, error) {
 
 type ControlAPIClient interface {
 	ListServices() ([]any, int64, error)
+	ListUpstreams() ([]any, int64, error)
 }
 
 type controlAPI struct {
 	client *httpexpect.Expect
+}
+
+func (c *controlAPI) ListUpstreams() (result []any, total int64, err error) {
+	resp := c.client.Request(http.MethodGet, "/v1/upstreams").Expect()
+	if resp.Raw().StatusCode != http.StatusOK {
+		return nil, 0, fmt.Errorf("unexpected status code: %v, message: %s", resp.Raw().StatusCode, resp.Body().Raw())
+	}
+	if err = json.Unmarshal([]byte(resp.Body().Raw()), &result); err != nil {
+		return nil, 0, fmt.Errorf("failed to unmarshal response body: %w", err)
+	}
+	return result, int64(len(result)), err
 }
 
 func (c *controlAPI) ListServices() (result []any, total int64, err error) {
