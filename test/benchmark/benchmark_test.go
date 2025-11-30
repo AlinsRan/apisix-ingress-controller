@@ -289,7 +289,7 @@ spec:
 			Expect(err).NotTo(HaveOccurred(), "creating IngressClass")
 			time.Sleep(5 * time.Second)
 		})
-		FIt("benchmark ApisixRoute", func() {
+		It("benchmark ApisixRoute", func() {
 			benchmark("ApisixRoute Benchmark")
 		})
 		It("10 apisix-standalone pod scale benchmark", func() {
