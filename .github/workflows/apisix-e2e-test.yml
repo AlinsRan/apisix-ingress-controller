@@ -51,7 +51,6 @@ common_setup: &common_setup
   - name: Install ginkgo
     run: make install-ginkgo
 
-
 common_build_and_kind: &common_build_and_kind
   - name: Install kind
     run: go install sigs.k8s.io/kind@v0.23.0
@@ -89,13 +88,11 @@ jobs:
         provider_type: [ apisix-standalone, apisix ]
         cases_subset: [ apisix.apache.org, networking.k8s.io, webhook ]
       fail-fast: false
-
     runs-on: ubuntu-latest
-
     steps:
-      *common_setup
-      *common_build_and_kind
-      *common_extract_adc
+      - <<: *common_setup
+      - <<: *common_build_and_kind
+      - <<: *common_extract_adc
 
       - name: Install Gateway API and CRDs
         run: make install
@@ -121,9 +118,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      *common_setup
-      *common_build_and_kind
-      *common_extract_adc
+      - <<: *common_setup
+      - <<: *common_build_and_kind
+      - <<: *common_extract_adc
 
       - name: Install CRDs
         run: make install-crds
