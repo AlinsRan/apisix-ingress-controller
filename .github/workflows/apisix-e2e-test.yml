@@ -178,5 +178,5 @@ jobs:
         env:
           TEST_DIR: "./test/e2e/apisix/"
           TEST_ENV: CI
-          TEST_FOCUS: "Test ApisixRoute Basic tests"
+          E2E_FOCUS: "Test ApisixRoute Basic tests"
         run: make ginkgo-e2e-test
