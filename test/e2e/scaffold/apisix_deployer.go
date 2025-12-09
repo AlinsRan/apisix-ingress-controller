@@ -112,6 +112,12 @@ func (s *APISIXDeployer) AfterEach() {
 			_, _ = fmt.Fprintln(GinkgoWriter, output)
 		}
 
+		output = s.GetDeploymentLogs("apisix")
+		if output != "" {
+			_, _ = fmt.Fprintln(GinkgoWriter, "Dumping APISIX logs:")
+			_, _ = fmt.Fprintln(GinkgoWriter, output)
+		}
+
 		if framework.ProviderType == framework.ProviderTypeAPISIXStandalone && s.adminTunnel != nil {
 			client := NewClient("http", s.adminTunnel.Endpoint())
 			reporter := &ErrorReporter{}
