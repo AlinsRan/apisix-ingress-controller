@@ -143,7 +143,7 @@ e2e-test: adc
 
 .PHONY: ginkgo-e2e-test
 ginkgo-e2e-test: adc
-	@ginkgo -cover -coverprofile=coverage.txt -r --randomize-all --randomize-suites --trace --focus=$(E2E_FOCUS) --nodes=$(E2E_NODES) --label-filter="$(TEST_LABEL)" $(TEST_DIR)
+	@ginkgo -cover -coverprofile=coverage.txt -r --randomize-all --randomize-suites --fail-fast --trace --focus=$(E2E_FOCUS) --nodes=$(E2E_NODES) --label-filter="$(TEST_LABEL)" $(TEST_DIR)
 
 .PHONY: install-ginkgo
 install-ginkgo:
