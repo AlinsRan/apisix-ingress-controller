@@ -235,7 +235,12 @@ spec:
 			assert.NotNil(GinkgoT(), tls[0].Client, "client configuration should not be nil")
 			assert.NotEmpty(GinkgoT(), tls[0].Client.CA, "client CA should not be empty")
 			assert.Equal(GinkgoT(), normalizePEM(caCert), normalizePEM(tls[0].Client.CA), "client CA should be test-ca-secret")
-			assert.Equal(GinkgoT(), int64(1), *tls[0].Client.Depth, "client depth should be 1")
+			depth := int64(1)
+			if s.Deployer.Name() == framework.ProviderTypeAPI7EE {
+				depth = int64(10) // API7EE control plane currently defaults to depth 10 for mTLS
+			}
+			assert.NotNil(GinkgoT(), tls[0].Client.Depth, "client depth should be set")
+			assert.Equal(GinkgoT(), depth, *tls[0].Client.Depth, fmt.Sprintf("client depth should be %d", depth))
 		})
 		It("ApisixTls with skip_mtls_uri_regex test", func() {
 			// TODO: Add support for skip_mtls_uri_regex in API7EE control plane
