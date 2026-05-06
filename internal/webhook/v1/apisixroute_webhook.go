@@ -77,6 +77,9 @@ func (v *ApisixRouteCustomValidator) ValidateCreate(ctx context.Context, obj run
 		apisixRouteLog.Error(v.initErr, "ADC validator init failed, skipping ADC validation")
 		return warnings, nil
 	}
+	if len(warnings) > 0 {
+		return warnings, nil
+	}
 	return warnings, v.adcValidator.Validate(ctx, route)
 }
 
@@ -93,6 +96,9 @@ func (v *ApisixRouteCustomValidator) ValidateUpdate(ctx context.Context, oldObj,
 	warnings := v.collectWarnings(ctx, route)
 	if v.initErr != nil {
 		apisixRouteLog.Error(v.initErr, "ADC validator init failed, skipping ADC validation")
+		return warnings, nil
+	}
+	if len(warnings) > 0 {
 		return warnings, nil
 	}
 	return warnings, v.adcValidator.Validate(ctx, route)
