@@ -149,4 +149,76 @@ spec:
 		err = s.CreateResourceFromString(tlsYAML)
 		Expect(err).NotTo(HaveOccurred(), "creating corrected ApisixTls")
 	})
+
+	It("should reject TLS update with invalid certificate material", func() {
+		if framework.ProviderType != framework.ProviderTypeAPISIXStandalone {
+			Skip("ADC validation requires apisix-standalone backend")
+		}
+
+		serverSecret := "update-server-tls"
+		tlsName := "webhook-apisixtls-update"
+		host := "update-webhook.example.com"
+
+		By("creating a valid TLS secret")
+		serverCert, serverKey := s.GenerateCert(GinkgoT(), []string{host})
+		err := s.NewKubeTlsSecret(serverSecret, serverCert.String(), serverKey.String())
+		Expect(err).NotTo(HaveOccurred(), "creating initial valid server TLS secret")
+
+		tlsYAML := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v2
+kind: ApisixTls
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  ingressClassName: %s
+  hosts:
+  - %s
+  secret:
+    name: %s
+    namespace: %s
+`, tlsName, s.Namespace(), s.Namespace(), host, serverSecret, s.Namespace())
+
+		By("creating valid ApisixTls")
+		err = s.CreateResourceFromString(tlsYAML)
+		Expect(err).NotTo(HaveOccurred(), "creating initial valid ApisixTls")
+
+		By("replacing secret with invalid certificate data")
+		err = s.DeleteResource("Secret", serverSecret)
+		Expect(err).NotTo(HaveOccurred(), "deleting valid server TLS secret")
+		invalidSecretYAML := fmt.Sprintf(`
+apiVersion: v1
+kind: Secret
+metadata:
+  name: %s
+  namespace: %s
+type: kubernetes.io/tls
+stringData:
+  tls.crt: not-a-cert
+  tls.key: not-a-key
+`, serverSecret, s.Namespace())
+		err = s.CreateResourceFromString(invalidSecretYAML)
+		Expect(err).NotTo(HaveOccurred(), "creating invalid server TLS secret")
+
+		// Wait for the webhook cache to reflect the replaced Secret.
+		time.Sleep(2 * time.Second)
+
+		By("updating ApisixTls with secret now containing invalid certificate data")
+		err = s.CreateResourceFromString(tlsYAML)
+		expectAdmissionDenied(s, "apisixtls", tlsName, err)
+
+		By("replacing secret back with valid certificate data")
+		err = s.DeleteResource("Secret", serverSecret)
+		Expect(err).NotTo(HaveOccurred(), "deleting invalid server TLS secret")
+		serverCert, serverKey = s.GenerateCert(GinkgoT(), []string{host})
+		err = s.NewKubeTlsSecret(serverSecret, serverCert.String(), serverKey.String())
+		Expect(err).NotTo(HaveOccurred(), "recreating valid server TLS secret")
+
+		// Wait for the webhook cache to reflect the restored Secret.
+		time.Sleep(2 * time.Second)
+
+		By("updating ApisixTls with valid certificate data")
+		err = s.CreateResourceFromString(tlsYAML)
+		Expect(err).NotTo(HaveOccurred(), "updating ApisixTls with valid certificate")
+	})
 })
