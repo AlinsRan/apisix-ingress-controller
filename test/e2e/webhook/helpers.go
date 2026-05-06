@@ -168,6 +168,18 @@ spec:
 	time.Sleep(5 * time.Second)
 }
 
+func expectAdmissionDenied(s *scaffold.Scaffold, resourceType, resourceName string, err error, messageSubstrings ...string) {
+	Expect(err).To(HaveOccurred(), "expecting admission rejection")
+	Expect(err.Error()).To(ContainSubstring("denied the request"))
+	for _, substring := range messageSubstrings {
+		Expect(err.Error()).To(ContainSubstring(substring))
+	}
+
+	_, getErr := s.GetOutputFromString(resourceType, resourceName, "-o", "yaml")
+	Expect(getErr).To(HaveOccurred(), fmt.Sprintf("resource %s/%s should not exist after admission rejection", resourceType, resourceName))
+	Expect(getErr.Error()).To(ContainSubstring("not found"), fmt.Sprintf("expected NotFound error for %s/%s", resourceType, resourceName))
+}
+
 func verifySimpleRouteMissingBackendWarnings(s *scaffold.Scaffold, tc simpleRouteWebhookTestCase) {
 	gatewayName := s.Namespace()
 	routeYAML := fmt.Sprintf(`

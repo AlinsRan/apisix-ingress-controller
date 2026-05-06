@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/apache/apisix-ingress-controller/test/e2e/framework"
 	"github.com/apache/apisix-ingress-controller/test/e2e/scaffold"
 )
 
@@ -113,5 +114,87 @@ stringData:
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(output).NotTo(ContainSubstring(fmt.Sprintf("Warning: Referenced Service '%s/%s' not found", s.Namespace(), missingService)))
 		Expect(output).NotTo(ContainSubstring(fmt.Sprintf("Warning: Referenced Secret '%s/%s' not found", s.Namespace(), missingSecret)))
+	})
+
+	It("should reject routes that fail ADC validation", func() {
+		if framework.ProviderType != framework.ProviderTypeAPISIXStandalone {
+			Skip("ADC validation requires apisix-standalone backend")
+		}
+
+		backendService := "webhook-route-backend"
+		routeName := "webhook-apisixroute-invalid"
+
+		By("creating referenced Service")
+		serviceYAML := fmt.Sprintf(`
+apiVersion: v1
+kind: Service
+metadata:
+  name: %s
+spec:
+  selector:
+    app: placeholder
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+  type: ClusterIP
+`, backendService)
+		err := s.CreateResourceFromString(serviceYAML)
+		Expect(err).NotTo(HaveOccurred(), "creating backend service")
+
+		invalidRouteYAML := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  ingressClassName: %s
+  http:
+  - name: rule-invalid
+    match:
+      hosts:
+      - webhook.example.com
+      paths:
+      - /invalid
+    backends:
+    - serviceName: %s
+      servicePort: 80
+      resolveGranularity: service
+    plugins:
+    - name: response-rewrite
+      enable: true
+      config:
+        status_code: "500"
+`, routeName, s.Namespace(), s.Namespace(), backendService)
+
+		By("creating ApisixRoute with invalid plugin config")
+		err = s.CreateResourceFromString(invalidRouteYAML)
+		expectAdmissionDenied(s, "apisixroute", routeName, err)
+
+		validRouteYAML := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v2
+kind: ApisixRoute
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  ingressClassName: %s
+  http:
+  - name: rule-valid
+    match:
+      hosts:
+      - webhook.example.com
+      paths:
+      - /valid
+    backends:
+    - serviceName: %s
+      servicePort: 80
+      resolveGranularity: service
+`, routeName, s.Namespace(), s.Namespace(), backendService)
+
+		By("creating corrected ApisixRoute")
+		err = s.CreateResourceFromString(validRouteYAML)
+		Expect(err).NotTo(HaveOccurred(), "creating corrected ApisixRoute")
 	})
 })

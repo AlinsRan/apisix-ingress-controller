@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/apache/apisix-ingress-controller/test/e2e/framework"
 	"github.com/apache/apisix-ingress-controller/test/e2e/scaffold"
 )
 
@@ -73,32 +74,13 @@ spec:
 		Expect(output).To(ContainSubstring(fmt.Sprintf("Warning: Referenced Secret '%s/%s' not found", s.Namespace(), serverSecret)))
 		Expect(output).To(ContainSubstring(fmt.Sprintf("Warning: Referenced Secret '%s/%s' not found", s.Namespace(), clientSecret)))
 
-		By("creating referenced TLS secrets")
-		serverSecretYAML := fmt.Sprintf(`
-apiVersion: v1
-kind: Secret
-metadata:
-  name: %s
-  namespace: %s
-type: kubernetes.io/tls
-stringData:
-  tls.crt: dummy-cert
-  tls.key: dummy-key
-`, serverSecret, s.Namespace())
-		err = s.CreateResourceFromString(serverSecretYAML)
+		By("creating referenced TLS secrets with valid certificate material")
+		serverCert, serverKey := s.GenerateCert(GinkgoT(), []string{"webhook.example.com"})
+		err = s.NewKubeTlsSecret(serverSecret, serverCert.String(), serverKey.String())
 		Expect(err).NotTo(HaveOccurred(), "creating server TLS secret")
 
-		clientSecretYAML := fmt.Sprintf(`
-apiVersion: v1
-kind: Secret
-metadata:
-  name: %s
-  namespace: %s
-type: Opaque
-stringData:
-  ca.crt: dummy-ca
-`, clientSecret, s.Namespace())
-		err = s.CreateResourceFromString(clientSecretYAML)
+		caCert, _, _, _, _ := s.GenerateMACert(GinkgoT(), []string{"webhook.example.com"})
+		err = s.NewClientCASecret(clientSecret, caCert.String(), "")
 		Expect(err).NotTo(HaveOccurred(), "creating client CA secret")
 
 		time.Sleep(2 * time.Second)
@@ -107,5 +89,64 @@ stringData:
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(output).NotTo(ContainSubstring(fmt.Sprintf("Warning: Referenced Secret '%s/%s' not found", s.Namespace(), serverSecret)))
 		Expect(output).NotTo(ContainSubstring(fmt.Sprintf("Warning: Referenced Secret '%s/%s' not found", s.Namespace(), clientSecret)))
+	})
+
+	It("should reject invalid TLS material during ADC validation", func() {
+		if framework.ProviderType != framework.ProviderTypeAPISIXStandalone {
+			Skip("ADC validation requires apisix-standalone backend")
+		}
+
+		serverSecret := "invalid-server-tls"
+		tlsName := "webhook-apisixtls-invalid"
+		host := "invalid-webhook.example.com"
+
+		By("creating a referenced TLS secret with invalid certificate data")
+		invalidServerSecretYAML := fmt.Sprintf(`
+apiVersion: v1
+kind: Secret
+metadata:
+  name: %s
+  namespace: %s
+type: kubernetes.io/tls
+stringData:
+  tls.crt: not-a-cert
+  tls.key: not-a-key
+`, serverSecret, s.Namespace())
+		err := s.CreateResourceFromString(invalidServerSecretYAML)
+		Expect(err).NotTo(HaveOccurred(), "creating invalid server TLS secret")
+
+		tlsYAML := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v2
+kind: ApisixTls
+metadata:
+  name: %s
+  namespace: %s
+spec:
+  ingressClassName: %s
+  hosts:
+  - %s
+  secret:
+    name: %s
+    namespace: %s
+`, tlsName, s.Namespace(), s.Namespace(), host, serverSecret, s.Namespace())
+
+		By("creating ApisixTls backed by invalid certificate material")
+		err = s.CreateResourceFromString(tlsYAML)
+		expectAdmissionDenied(s, "apisixtls", tlsName, err)
+
+		By("replacing the secret with valid certificate material")
+		err = s.DeleteResource("Secret", serverSecret)
+		Expect(err).NotTo(HaveOccurred(), "deleting invalid server TLS secret")
+
+		serverCert, serverKey := s.GenerateCert(GinkgoT(), []string{host})
+		err = s.NewKubeTlsSecret(serverSecret, serverCert.String(), serverKey.String())
+		Expect(err).NotTo(HaveOccurred(), "creating valid server TLS secret")
+
+		// Wait for the webhook cache to reflect the recreated Secret before submitting ApisixTls.
+		time.Sleep(2 * time.Second)
+
+		By("creating corrected ApisixTls")
+		err = s.CreateResourceFromString(tlsYAML)
+		Expect(err).NotTo(HaveOccurred(), "creating corrected ApisixTls")
 	})
 })

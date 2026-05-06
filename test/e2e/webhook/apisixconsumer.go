@@ -19,11 +19,13 @@ package webhook
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/apache/apisix-ingress-controller/test/e2e/framework"
 	"github.com/apache/apisix-ingress-controller/test/e2e/scaffold"
 )
 
@@ -84,5 +86,70 @@ stringData:
 		output, err = s.CreateResourceFromStringAndGetOutput(fmt.Sprintf(consumerYAML, consumerName, s.Namespace(), s.Namespace(), missingSecret))
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(output).NotTo(ContainSubstring(fmt.Sprintf("Warning: Referenced Secret '%s/%s' not found", s.Namespace(), missingSecret)))
+	})
+
+	It("should reject invalid plugin config during ADC validation", func() {
+		if framework.ProviderType != framework.ProviderTypeAPISIXStandalone {
+			Skip("ADC validation requires apisix-standalone backend")
+		}
+
+		privateKeyYAML := "          " + strings.ReplaceAll(framework.TestKey, "\n", "\n          ")
+
+		firstConsumer := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v2
+kind: ApisixConsumer
+metadata:
+  name: webhook-apisixconsumer-a
+  namespace: %s
+spec:
+  ingressClassName: %s
+  authParameter:
+    keyAuth:
+      value:
+        key: consumer-a-key
+`, s.Namespace(), s.Namespace())
+
+		By("creating the first ApisixConsumer with valid key-auth config")
+		err := s.CreateResourceFromString(firstConsumer)
+		Expect(err).NotTo(HaveOccurred(), "creating first ApisixConsumer")
+
+		invalidConsumer := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v2
+kind: ApisixConsumer
+metadata:
+  name: webhook-apisixconsumer-b
+  namespace: %s
+spec:
+  ingressClassName: %s
+  authParameter:
+    jwtAuth:
+      value:
+        key: consumer-b-key
+        algorithm: INVALID_ALGO
+        private_key: |
+%s
+`, s.Namespace(), s.Namespace(), privateKeyYAML)
+
+		By("creating ApisixConsumer with an invalid jwt-auth algorithm")
+		err = s.CreateResourceFromString(invalidConsumer)
+		expectAdmissionDenied(s, "apisixconsumer", "webhook-apisixconsumer-b", err)
+
+		correctedConsumer := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v2
+kind: ApisixConsumer
+metadata:
+  name: webhook-apisixconsumer-b
+  namespace: %s
+spec:
+  ingressClassName: %s
+  authParameter:
+    keyAuth:
+      value:
+        key: consumer-b-corrected-key
+`, s.Namespace(), s.Namespace())
+
+		By("creating corrected ApisixConsumer with valid auth config")
+		err = s.CreateResourceFromString(correctedConsumer)
+		Expect(err).NotTo(HaveOccurred(), "creating corrected ApisixConsumer")
 	})
 })

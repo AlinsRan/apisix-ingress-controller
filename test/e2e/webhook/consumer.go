@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/apache/apisix-ingress-controller/test/e2e/framework"
 	"github.com/apache/apisix-ingress-controller/test/e2e/scaffold"
 )
 
@@ -89,5 +90,73 @@ stringData:
 		output, err = s.CreateResourceFromStringAndGetOutput(fmt.Sprintf(consumerYAML, consumerName, gatewayName, missingSecret))
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(output).NotTo(ContainSubstring(fmt.Sprintf("Warning: Referenced Secret '%s/%s' not found", s.Namespace(), missingSecret)))
+	})
+
+	It("should reject invalid plugin config during ADC validation", func() {
+		if framework.ProviderType != framework.ProviderTypeAPISIXStandalone {
+			Skip("ADC validation requires apisix-standalone backend")
+		}
+
+		gatewayName := s.Namespace()
+
+		firstConsumer := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v1alpha1
+kind: Consumer
+metadata:
+  name: webhook-consumer-a
+spec:
+  gatewayRef:
+    name: %s
+  credentials:
+  - type: key-auth
+    name: key-auth-a
+    config:
+      key: consumer-a-key
+`, gatewayName)
+
+		By("creating the first Consumer with valid key-auth config")
+		err := s.CreateResourceFromString(firstConsumer)
+		Expect(err).NotTo(HaveOccurred(), "creating first Consumer")
+
+		invalidConsumer := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v1alpha1
+kind: Consumer
+metadata:
+  name: webhook-consumer-b
+spec:
+  gatewayRef:
+    name: %s
+  credentials:
+  - type: jwt-auth
+    name: jwt-cred
+    config:
+      key: consumer-b-key
+      algorithm: INVALID_ALGO
+`, gatewayName)
+
+		By("creating Consumer with an invalid jwt-auth algorithm")
+		err = s.CreateResourceFromString(invalidConsumer)
+		expectAdmissionDenied(s, "consumer", "webhook-consumer-b", err)
+
+		correctedConsumer := fmt.Sprintf(`
+apiVersion: apisix.apache.org/v1alpha1
+kind: Consumer
+metadata:
+  name: webhook-consumer-b
+spec:
+  gatewayRef:
+    name: %s
+  credentials:
+  - type: jwt-auth
+    name: jwt-cred
+    config:
+      key: consumer-b-key
+      algorithm: HS256
+      secret: consumer-b-secret
+`, gatewayName)
+
+		By("creating corrected Consumer with a valid algorithm")
+		err = s.CreateResourceFromString(correctedConsumer)
+		Expect(err).NotTo(HaveOccurred(), "creating corrected Consumer")
 	})
 })
